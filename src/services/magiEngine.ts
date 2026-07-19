@@ -21,7 +21,8 @@ export async function runPhase1Initial(
   query: string,
   settings: Settings,
   callbacks: MagiEngineCallbacks,
-  attachedDoc?: FetchedDocument
+  attachedDoc?: FetchedDocument,
+  sessionId: string = `SESSION-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
 ): Promise<Record<MagiId, MagiInitialOutput>> {
   const magiIds: MagiId[] = ['MELCHIOR', 'BALTHASAR', 'CASPAR'];
   const results: Partial<Record<MagiId, MagiInitialOutput>> = {};
@@ -39,12 +40,14 @@ export async function runPhase1Initial(
     callbacks.onLog({
       source: id,
       phase: 'CODE: 39 - INITIAL ANALYSIS',
-      text: `${personality.name} 独立可否分析プロトコル開始...${attachedDoc ? ' (参照ドキュメント解析中)' : ''}`,
+      text: `${personality.name} 独立可否分析プロトコル開始 (SESSION: ${sessionId})...${attachedDoc ? ' (参照ドキュメント解析中)' : ''}`,
       type: 'info'
     });
 
+    const sessionIsolationDirective = `\n\n【セッション隔離指示 / SESSION_ID: ${sessionId}】\n- 本セッションは完全に独立した新しい審議リクエスト (SESSION_ID: ${sessionId}) です。\n- 過去のセッションの記憶や他議題のコンテキスト、プロンプトキャッシュは完全に無効化・遮断されています。\n- 以下の【本リクエストの検討議題】および添付の【参照外部ドキュメント】のみに100%集中して独立分析を行ってください。`;
+
     const messages = [
-      { role: 'system' as const, content: fullSystemPrompt },
+      { role: 'system' as const, content: `${fullSystemPrompt}${sessionIsolationDirective}` },
       { role: 'user' as const, content: `【本リクエストの検討議題】\n${query}${docContext}\n\n上記の【本リクエストの検討議題】および添付の【参照外部ドキュメント】のみに100%集中して分析してください。過去のセッションや本議題と無関係な話題についての記述は厳禁です。指定のJSON形式で回答してください。` }
     ];
 
@@ -101,7 +104,8 @@ export async function runPhase2Debate(
   initialOutputs: Record<MagiId, MagiInitialOutput>,
   settings: Settings,
   callbacks: MagiEngineCallbacks,
-  attachedDoc?: FetchedDocument
+  attachedDoc?: FetchedDocument,
+  sessionId: string = `SESSION-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
 ): Promise<Record<MagiId, MagiDeliberationOutput>> {
   const magiIds: MagiId[] = ['MELCHIOR', 'BALTHASAR', 'CASPAR'];
   const results: Partial<Record<MagiId, MagiDeliberationOutput>> = {};
@@ -131,6 +135,7 @@ ${out.conditions ? `【提示条件】: ${out.conditions}` : ''}`;
     });
 
     const fullSystemPrompt = buildFullSystemPrompt(personality);
+    const sessionIsolationDirective = `\n\n【セッション隔離指示 / SESSION_ID: ${sessionId}】\n- 本熟議は完全に独立した新セッション (SESSION_ID: ${sessionId}) 内で行われます。\n- 過去のセッションの記憶や他議題のコンテキストは遮断されています。\n- 提示された【議題】および他MAGIユニットの初案データのみに基づいて議論してください。`;
 
     const debatePrompt = `【議題】
 ${query}${docContext}
@@ -152,7 +157,7 @@ ${initialSummary}
 }`;
 
     const messages = [
-      { role: 'system' as const, content: fullSystemPrompt },
+      { role: 'system' as const, content: `${fullSystemPrompt}${sessionIsolationDirective}` },
       { role: 'user' as const, content: debatePrompt }
     ];
 
@@ -203,7 +208,8 @@ export async function runPhase3Consensus(
   initialOutputs: Record<MagiId, MagiInitialOutput>,
   deliberationOutputs: Record<MagiId, MagiDeliberationOutput> | undefined,
   settings: Settings,
-  callbacks: MagiEngineCallbacks
+  callbacks: MagiEngineCallbacks,
+  sessionId: string = `SESSION-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
 ): Promise<ConsensusResult> {
   callbacks.onLog({
     source: 'MAGI_CORE',
@@ -234,8 +240,10 @@ export async function runPhase3Consensus(
 ${delib ? `- 熟議後判定: ${delib.revisedVote}\n- 熟議論点: ${delib.refinements}\n- 最終主張: ${delib.finalArgument}` : ''}`;
   }).join('\n\n');
 
+  const sessionIsolationDirective = `\n\n【セッション隔離指示 / SESSION_ID: ${sessionId}】\n- 本決議統合は完全に独立した新セッション (SESSION_ID: ${sessionId}) 内で行われます。\n- 提示された【議題】および【各MAGIの個別決議と熟議内容】のみに基づいて最終統合レポートを作成してください。`;
+
   const synthesizerMessages = [
-    { role: 'system' as const, content: SYSTEM_CONSENSUS_PROMPT },
+    { role: 'system' as const, content: `${SYSTEM_CONSENSUS_PROMPT}${sessionIsolationDirective}` },
     {
       role: 'user' as const,
       content: `【議題】

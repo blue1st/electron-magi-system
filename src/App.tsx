@@ -130,11 +130,14 @@ export const App: React.FC = () => {
     const query = queryInput.trim();
     setLogs([]);
 
-    // Check if query contains an unattached URL
-    let currentDoc = attachedDoc;
+    const sessionId = `SESSION-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+
+    // Handle document context isolation for this session
+    let currentDoc: FetchedDocument | null = null;
     const detectedUrls = extractUrls(query);
 
-    if (!currentDoc && detectedUrls.length > 0) {
+    if (detectedUrls.length > 0) {
+      // Priority 1: URL in the query itself
       const targetUrl = detectedUrls[0];
       try {
         setIsFetchingDoc(true);
@@ -162,12 +165,19 @@ export const App: React.FC = () => {
       } finally {
         setIsFetchingDoc(false);
       }
+    } else if (attachedDoc && urlInput.trim() && attachedDoc.url === urlInput.trim()) {
+      // Priority 2: Use manually attached doc ONLY if it matches the current URL input box
+      currentDoc = attachedDoc;
+    } else {
+      // Priority 3: Clear any stale document from previous runs
+      currentDoc = null;
+      setAttachedDoc(null);
     }
 
     addLog({
       source: 'SYSTEM',
       phase: 'INITIATE',
-      text: `議題受信: "${query.slice(0, 50)}..."${currentDoc ? ` (参照ドキュメント: ${currentDoc.title})` : ''}`,
+      text: `新セッション起動 (${sessionId}) - 議題: "${query.slice(0, 50)}..."${currentDoc ? ` (参照ドキュメント: ${currentDoc.title})` : ''}`,
       type: 'info',
     });
 
@@ -185,7 +195,7 @@ export const App: React.FC = () => {
       const initial = await runPhase1Initial(query, settings, {
         onLog: addLog,
         onMagiStatusChange: handleMagiStatusChange,
-      }, currentDoc || undefined);
+      }, currentDoc || undefined, sessionId);
 
       setState((prev) => ({ ...prev, initialOutputs: initial }));
 
@@ -197,7 +207,7 @@ export const App: React.FC = () => {
         const debateResults = await runPhase2Debate(query, initial, settings, {
           onLog: addLog,
           onMagiStatusChange: handleMagiStatusChange,
-        }, currentDoc || undefined);
+        }, currentDoc || undefined, sessionId);
         delibOutputs = debateResults;
         setState((prev) => ({ ...prev, deliberationOutputs: debateResults }));
       }
@@ -207,7 +217,7 @@ export const App: React.FC = () => {
       const consensus = await runPhase3Consensus(query, initial, delibOutputs as any, settings, {
         onLog: addLog,
         onMagiStatusChange: handleMagiStatusChange,
-      });
+      }, sessionId);
 
       setState((prev) => ({
         ...prev,
@@ -379,7 +389,11 @@ export const App: React.FC = () => {
                 <button
                   key={idx}
                   type="button"
-                  onClick={() => setQueryInput(q)}
+                  onClick={() => {
+                    setQueryInput(q);
+                    setAttachedDoc(null);
+                    setUrlInput('');
+                  }}
                   disabled={isBusy}
                   className="text-[11px] font-mono-nerv px-2.5 py-1 rounded bg-slate-900 border border-slate-800 text-slate-400 hover:text-magi-orange hover:border-magi-orange/50 transition-all whitespace-nowrap"
                 >
