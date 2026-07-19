@@ -1,6 +1,6 @@
 {
   "name": "magi-system",
-  "version": "1.3.2",
+  "version": "1.3.3",
   "type": "module",
   "description": "MAGI System - Tripartite Consensus AI Deliberation System for Electron",
   "main": "electron/main.cjs",
