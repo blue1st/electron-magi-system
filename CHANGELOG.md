@@ -1,5 +1,12 @@
 
 
+## [1.3.4](https://github.com/blue1st/electron-magi-system/compare/v1.3.3...v1.3.4) (2026-07-19)
+
+
+### Bug Fixes
+
+* correct GitHub repository URL to electron-magi-system in Cask formula and README ([dcf049a](https://github.com/blue1st/electron-magi-system/commit/dcf049ae7732bd19e498b9144715e58500a41047))
+
 ## [1.3.3](https://github.com/blue1st/electron-magi-system/compare/v1.3.2...v1.3.3) (2026-07-19)
 
 ## [1.3.2](https://github.com/blue1st/electron-magi-system/compare/v1.3.1...v1.3.2) (2026-07-19)
