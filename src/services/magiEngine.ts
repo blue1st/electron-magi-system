@@ -70,7 +70,7 @@ export async function runPhase1Initial(
       callbacks.onLog({
         source: id,
         phase: 'CODE: 39 - PROPOSAL COMPLETE',
-        text: `【初案決議: ${vote}】 ${output.reasoning.slice(0, 70)}...`,
+        text: `【初案決議: ${vote}】\n${output.reasoning}${output.conditions ? `\n\n【前提条件】:\n${output.conditions}` : ''}`,
         type: vote === 'APPROVAL' ? 'success' : vote === 'DENIED' ? 'warn' : 'info'
       });
     } catch (err: any) {
@@ -178,7 +178,7 @@ ${initialSummary}
       callbacks.onLog({
         source: id,
         phase: 'CODE: 407 - DELIBERATION COMPLETE',
-        text: `【熟議後判定: ${vote}】 ${output.refinements.slice(0, 70)}...`,
+        text: `【熟議後判定: ${vote}】\n${output.refinements}\n\n【最終主張】:\n${output.finalArgument}`,
         type: vote === 'APPROVAL' ? 'success' : vote === 'DENIED' ? 'warn' : 'info'
       });
     } catch (err: any) {

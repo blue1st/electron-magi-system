@@ -241,11 +241,11 @@ export const App: React.FC = () => {
   const isBusy = state.step !== 'IDLE' && state.step !== 'COMPLETED' && state.step !== 'ERROR';
 
   return (
-    <div className="min-h-screen bg-magi-bg text-slate-100 flex flex-col relative bg-hex-grid">
+    <div className="h-screen overflow-hidden bg-magi-bg text-slate-100 flex flex-col relative bg-hex-grid">
       {/* Scanline overlay */}
       <div className="fixed inset-0 scanline-overlay z-10 pointer-events-none" />
 
-      {/* Header */}
+      {/* Header (Fixed at top) */}
       <MagiHeader
         settings={settings}
         step={state.step}
@@ -256,11 +256,11 @@ export const App: React.FC = () => {
         }
       />
 
-      {/* Progress Step Bar */}
+      {/* Progress Step Bar (Fixed below header) */}
       <DeliberationPhaseBar step={state.step} enableDeliberation={settings.enableDeliberation} />
 
-      {/* Main Container */}
-      <main className="flex-1 max-w-7xl w-full mx-auto p-6 flex flex-col z-20">
+      {/* Main Content Scrollable Container */}
+      <main className="flex-1 overflow-y-auto max-w-7xl w-full mx-auto p-6 flex flex-col z-20">
         {/* Input Query Bar */}
         <div className="bg-magi-card/90 border border-slate-700/80 rounded-lg p-5 mb-6 shadow-xl space-y-4">
           <form onSubmit={handleStartDeliberation} className="space-y-4">

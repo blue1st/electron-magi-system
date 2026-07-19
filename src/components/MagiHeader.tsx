@@ -1,6 +1,7 @@
 import React from 'react';
 import { Settings as SettingsIcon, Cpu, RefreshCw, Zap, Layers, Activity } from 'lucide-react';
 import { Settings, DeliberationStep } from '../types';
+import pkg from '../../package.json';
 
 interface MagiHeaderProps {
   settings: Settings;
@@ -18,9 +19,10 @@ export const MagiHeader: React.FC<MagiHeaderProps> = ({
   onToggleDeliberationMode,
 }) => {
   const isBusy = step !== 'IDLE' && step !== 'COMPLETED' && step !== 'ERROR';
+  const appVersion = pkg.version || '1.1.0';
 
   return (
-    <header className="h-16 border-b border-magi-orange/30 bg-magi-card/90 backdrop-blur-md pl-20 sm:pl-24 pr-6 flex items-center justify-between select-none z-30 app-drag-region">
+    <header className="h-16 border-b border-magi-orange/30 bg-magi-card/90 backdrop-blur-md pl-20 sm:pl-24 pr-6 flex items-center justify-between select-none shrink-0 z-30 app-drag-region">
       {/* Brand / Logo */}
       <div className="flex items-center space-x-3 app-no-drag">
         <div className="relative flex items-center justify-center w-9 h-9 rounded border border-magi-orange bg-magi-orange/10 text-magi-orange font-bold font-mono-nerv text-xl glow-orange shrink-0">
@@ -29,8 +31,11 @@ export const MagiHeader: React.FC<MagiHeaderProps> = ({
         <div>
           <div className="flex items-center space-x-2">
             <h1 className="text-base sm:text-lg font-bold tracking-widest text-white font-mono-nerv uppercase">
-              MAGI SYSTEM <span className="text-[10px] text-magi-orange border border-magi-orange/50 px-1 py-0.5 rounded">CODE: 39</span>
+              MAGI SYSTEM <span className="text-[10px] text-magi-orange border border-magi-orange/50 px-1.5 py-0.5 rounded">CODE: 39</span>
             </h1>
+            <span className="text-[10px] font-mono-nerv text-slate-400 bg-black/60 border border-slate-800 px-1.5 py-0.5 rounded">
+              v{appVersion}
+            </span>
           </div>
           <p className="text-[10px] text-slate-400 font-mono-nerv tracking-tight hidden lg:block">
             NERV SUPERCOMPUTER SYSTEM 01 • TRIPARTITE CONSENSUS ENGINE

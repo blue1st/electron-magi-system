@@ -59,7 +59,7 @@ export const ProtocolLogsInspector: React.FC<ProtocolLogsInspectorProps> = ({ lo
               <span className="text-slate-600 shrink-0">[{log.timestamp}]</span>
               <span className={`font-bold shrink-0 w-24 ${colorClass}`}>{log.source}</span>
               <span className="text-slate-500 shrink-0">[{log.phase}]</span>
-              <span className="text-slate-300 truncate">{log.text}</span>
+              <span className="text-slate-300 truncate">{log.text.replace(/\n+/g, ' ')}</span>
             </div>
           );
         })}

@@ -47,7 +47,7 @@ export const DeliberationPhaseBar: React.FC<DeliberationPhaseBarProps> = ({
   const currentIndex = getStepIndex(step);
 
   return (
-    <div className="w-full bg-black/60 border-b border-magi-orange/20 px-6 py-3">
+    <div className="w-full bg-black/60 border-b border-magi-orange/20 px-6 py-3 shrink-0 z-20">
       <div className="max-w-6xl mx-auto flex items-center justify-between">
         {phases.map((p, idx) => {
           const isDone = currentIndex > idx || step === 'COMPLETED';
