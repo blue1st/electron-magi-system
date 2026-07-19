@@ -1,5 +1,12 @@
 
 
+# [1.5.0](https://github.com/blue1st/electron-magi-system/compare/v1.4.0...v1.5.0) (2026-07-19)
+
+
+### Features
+
+* introduce session-based tracking and refine document context resolution logic ([40437db](https://github.com/blue1st/electron-magi-system/commit/40437dbb3f9cb79c9ee4265bfb21513d7532f1bc))
+
 # [1.4.0](https://github.com/blue1st/electron-magi-system/compare/v1.3.4...v1.4.0) (2026-07-19)
 
 
