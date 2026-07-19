@@ -1,0 +1,98 @@
+name: Build and Release MAGI System
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build Electron app binaries
+        run: npm run dist
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Draft GitHub Release & Upload Artifacts
+        id: create_release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            release/*.zip
+            release/*.dmg
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Calculate SHA256 & Update Homebrew Tap
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          TAP_GITHUB_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+        run: |
+          VERSION="${GITHUB_REF#refs/tags/v}"
+          
+          # Find zip artifact and compute SHA256
+          ZIP_FILE=$(ls release/*.zip | head -n 1)
+          SHA256=$(shasum -a 256 "$ZIP_FILE" | awk '{ print $1 }')
+          
+          echo "Version: $VERSION"
+          echo "SHA256: $SHA256"
+
+          if [ -z "$TAP_GITHUB_TOKEN" ]; then
+            echo "HOMEBREW_TAP_TOKEN is not set. Skipping Homebrew Tap update."
+            exit 0
+          fi
+
+          # Clone homebrew-taps repository
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          
+          git clone https://x-access-token:${TAP_GITHUB_TOKEN}@github.com/blue1st/homebrew-taps.git homebrew-taps
+          cd homebrew-taps
+
+          mkdir -p Casks
+
+          # Create or Update Cask definition with quarantine xattr postflight
+          cat <<EOF > Casks/magi-system.rb
+          cask "magi-system" do
+            version "${VERSION}"
+            sha256 "${SHA256}"
+
+            url "https://github.com/blue1st/magi-system/releases/download/v#{version}/MAGI.System-#{version}-mac.zip"
+            name "MAGI System"
+            desc "Tripartite Consensus AI Deliberation System for Electron"
+            homepage "https://github.com/blue1st/magi-system"
+
+            app "MAGI System.app"
+
+            postflight do
+              system_command "xattr",
+                             args: ["-dr", "com.apple.quarantine", "#{appdir}/MAGI System.app"],
+                             sudo: false
+            end
+          end
+          EOF
+
+          git add Casks/magi-system.rb
+          git commit -m "Update magi-system cask to v${VERSION}" || exit 0
+          git push origin main
