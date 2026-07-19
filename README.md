@@ -1,5 +1,9 @@
 # MAGI SYSTEM - 三位一体 AI 熟議・合議制意思決定デスクトップアプリ
 
+<p align="center">
+  <img src="public/icon.png" width="160" height="160" alt="MAGI System Icon">
+</p>
+
 アニメ『新世紀エヴァンゲリオン』に登場する超高精度スーパーコンピュータ**「MAGI（マギ）」**の合議意思決定システムをモチーフにした、OpenAI互換LLM（Local LLM / OpenAI / Groq等）対応の合議・熟議デスクトップアプリケーションです。
 
 自分の中にある3つの視点（**エンジニア・社会人・オタク少年**）が独立して思考し、相互討論（熟議）を経て最終的な合議判決を導き出します。
