@@ -130,7 +130,7 @@ export const App: React.FC = () => {
     const query = queryInput.trim();
     setLogs([]);
 
-    const sessionId = `SESSION-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    const deliberationId = `DELIB-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
 
     // Handle document context isolation for this session
     let currentDoc: FetchedDocument | null = null;
@@ -177,7 +177,7 @@ export const App: React.FC = () => {
     addLog({
       source: 'SYSTEM',
       phase: 'INITIATE',
-      text: `新セッション起動 (${sessionId}) - 議題: "${query.slice(0, 50)}..."${currentDoc ? ` (参照ドキュメント: ${currentDoc.title})` : ''}`,
+      text: `新合議プロトコル起動 (${deliberationId}) - 議題: "${query.slice(0, 50)}..."${currentDoc ? ` (参照ドキュメント: ${currentDoc.title})` : ''}`,
       type: 'info',
     });
 
@@ -195,7 +195,7 @@ export const App: React.FC = () => {
       const initial = await runPhase1Initial(query, settings, {
         onLog: addLog,
         onMagiStatusChange: handleMagiStatusChange,
-      }, currentDoc || undefined, sessionId);
+      }, currentDoc || undefined, deliberationId);
 
       setState((prev) => ({ ...prev, initialOutputs: initial }));
 
@@ -207,7 +207,7 @@ export const App: React.FC = () => {
         const debateResults = await runPhase2Debate(query, initial, settings, {
           onLog: addLog,
           onMagiStatusChange: handleMagiStatusChange,
-        }, currentDoc || undefined, sessionId);
+        }, currentDoc || undefined, deliberationId);
         delibOutputs = debateResults;
         setState((prev) => ({ ...prev, deliberationOutputs: debateResults }));
       }
@@ -217,7 +217,7 @@ export const App: React.FC = () => {
       const consensus = await runPhase3Consensus(query, initial, delibOutputs as any, settings, {
         onLog: addLog,
         onMagiStatusChange: handleMagiStatusChange,
-      }, sessionId);
+      }, deliberationId);
 
       setState((prev) => ({
         ...prev,
