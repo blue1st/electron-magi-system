@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Settings,
   DeliberationState,
@@ -64,6 +64,7 @@ export const App: React.FC = () => {
   });
 
   const [logs, setLogs] = useState<ProtocolLog[]>([]);
+  const consensusRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY_SETTINGS, JSON.stringify(settings));
@@ -72,6 +73,12 @@ export const App: React.FC = () => {
   useEffect(() => {
     updateAppDynamicIcon(state.step);
   }, [state.step]);
+
+  useEffect(() => {
+    if (state.consensus && consensusRef.current) {
+      consensusRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }, [state.consensus]);
 
   const addLog = (log: Omit<ProtocolLog, 'id' | 'timestamp'>) => {
     const newLog: ProtocolLog = {
@@ -431,6 +438,13 @@ export const App: React.FC = () => {
           </form>
         </div>
 
+        {/* Final Consensus Report (rendered prominently at top when completed) */}
+        {state.consensus && (
+          <div ref={consensusRef} className="animate-in fade-in slide-in-from-top-4 duration-500">
+            <ConsensusReportView consensus={state.consensus} />
+          </div>
+        )}
+
         {/* 3 MAGI Triad Panels */}
         <MagiTriadView settings={settings} state={state} />
 
@@ -438,9 +452,6 @@ export const App: React.FC = () => {
         {(state.step === 'PHASE_2_DEBATE' || state.step === 'PHASE_3_CONSENSUS' || state.step === 'COMPLETED') && (
           <DeliberationFlowGraph settings={settings} state={state} />
         )}
-
-        {/* Final Consensus Report */}
-        {state.consensus && <ConsensusReportView consensus={state.consensus} />}
 
       </main>
 
