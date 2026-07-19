@@ -1,5 +1,12 @@
 
 
+# [1.3.0](https://github.com/blue1st/electron-magi-system/compare/v1.2.0...v1.3.0) (2026-07-19)
+
+
+### Features
+
+* increment settings storage version to V2 and update default prompts ([b562d35](https://github.com/blue1st/electron-magi-system/commit/b562d35aa92725f99cc7177d600fc73915e2f6a5))
+
 # [1.2.0](https://github.com/blue1st/electron-magi-system/compare/v1.1.0...v1.2.0) (2026-07-19)
 
 
