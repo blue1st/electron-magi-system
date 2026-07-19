@@ -1,12 +1,18 @@
 import React from 'react';
 import { ConsensusResult } from '../types';
-import { CheckCircle2, ShieldAlert, AlertTriangle, FileText, Check, ListChecks } from 'lucide-react';
+import { CheckCircle2, ShieldAlert, AlertTriangle, FileText, Check, ListChecks, RotateCcw, Download } from 'lucide-react';
 
 interface ConsensusReportViewProps {
   consensus: ConsensusResult;
+  onStartFollowUp?: () => void;
+  onExportMarkdown?: () => void;
 }
 
-export const ConsensusReportView: React.FC<ConsensusReportViewProps> = ({ consensus }) => {
+export const ConsensusReportView: React.FC<ConsensusReportViewProps> = ({
+  consensus,
+  onStartFollowUp,
+  onExportMarkdown,
+}) => {
   const getDecisionHeader = () => {
     switch (consensus.finalDecision) {
       case 'APPROVAL':
@@ -45,7 +51,7 @@ export const ConsensusReportView: React.FC<ConsensusReportViewProps> = ({ consen
   return (
     <div className="w-full my-6 bg-magi-card/90 border border-slate-700 rounded-lg overflow-hidden shadow-2xl">
       {/* Header Banner */}
-      <div className={`p-6 border-b flex items-center justify-between ${header.bg}`}>
+      <div className={`p-6 border-b flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 ${header.bg}`}>
         <div className="flex items-center space-x-4">
           {header.icon}
           <div>
@@ -56,20 +62,33 @@ export const ConsensusReportView: React.FC<ConsensusReportViewProps> = ({ consen
           </div>
         </div>
 
-        {/* Tally Stats */}
-        {consensus.voteCounts && (
-          <div className="flex items-center space-x-3 text-xs font-mono-nerv">
-            <div className="px-3 py-1.5 rounded bg-black/60 border border-magi-green/40 text-magi-green">
-              APPROVAL: <span className="font-bold">{consensus.voteCounts.APPROVAL}</span>
+        {/* Tally Stats & Export */}
+        <div className="flex flex-wrap items-center gap-3 text-xs font-mono-nerv">
+          {consensus.voteCounts && (
+            <div className="flex items-center space-x-2">
+              <div className="px-2.5 py-1 rounded bg-black/60 border border-magi-green/40 text-magi-green">
+                APPROVAL: <span className="font-bold">{consensus.voteCounts.APPROVAL}</span>
+              </div>
+              <div className="px-2.5 py-1 rounded bg-black/60 border border-magi-red/40 text-magi-red">
+                DENIED: <span className="font-bold">{consensus.voteCounts.DENIED}</span>
+              </div>
+              <div className="px-2.5 py-1 rounded bg-black/60 border border-magi-yellow/40 text-magi-yellow">
+                CONDITIONAL: <span className="font-bold">{consensus.voteCounts.CONDITIONAL}</span>
+              </div>
             </div>
-            <div className="px-3 py-1.5 rounded bg-black/60 border border-magi-red/40 text-magi-red">
-              DENIED: <span className="font-bold">{consensus.voteCounts.DENIED}</span>
-            </div>
-            <div className="px-3 py-1.5 rounded bg-black/60 border border-magi-yellow/40 text-magi-yellow">
-              CONDITIONAL: <span className="font-bold">{consensus.voteCounts.CONDITIONAL}</span>
-            </div>
-          </div>
-        )}
+          )}
+
+          {onExportMarkdown && (
+            <button
+              onClick={onExportMarkdown}
+              className="px-3 py-1.5 rounded bg-black/70 hover:bg-black text-slate-200 border border-slate-600 hover:border-magi-orange hover:text-magi-orange transition-all flex items-center space-x-1.5 text-xs font-bold"
+              title="この合議レポートをMarkdownファイルとしてダウンロード"
+            >
+              <Download className="w-3.5 h-3.5" />
+              <span>EXPORT MD</span>
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Main Body */}
@@ -123,6 +142,31 @@ export const ConsensusReportView: React.FC<ConsensusReportViewProps> = ({ consen
           <div className="p-4 rounded bg-magi-green/5 border border-magi-green/30 text-slate-100 text-sm font-medium leading-relaxed">
             {consensus.actionableRecommendation}
           </div>
+        </div>
+
+        {/* Action Bar */}
+        <div className="pt-4 border-t border-slate-800 flex items-center justify-between">
+          <div>
+            {onExportMarkdown && (
+              <button
+                onClick={onExportMarkdown}
+                className="px-3.5 py-2 rounded bg-black/50 text-slate-300 border border-slate-700 hover:border-magi-orange hover:text-magi-orange font-mono-nerv text-xs font-bold transition-all flex items-center space-x-1.5"
+              >
+                <Download className="w-4 h-4" />
+                <span>レポートをMarkdown出力</span>
+              </button>
+            )}
+          </div>
+
+          {onStartFollowUp && (
+            <button
+              onClick={onStartFollowUp}
+              className="px-4 py-2.5 rounded bg-magi-orange/15 border border-magi-orange/60 text-magi-orange hover:bg-magi-orange/25 font-mono-nerv text-xs font-bold transition-all glow-orange flex items-center space-x-2 shadow-lg"
+            >
+              <RotateCcw className="w-4 h-4" />
+              <span>この合議結果を踏まえて追加審議（継続質問）</span>
+            </button>
+          )}
         </div>
       </div>
     </div>

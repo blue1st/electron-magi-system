@@ -4,12 +4,22 @@ import {
   DeliberationState,
   DeliberationMode,
   ProtocolLog,
-  MagiId
+  MagiId,
+  DeliberationSession
 } from './types';
 import { DEFAULT_PERSONALITIES, detectDeliberationMode } from './config/defaultPrompts';
 import { runPhase1Initial, runPhase2Debate, runPhase3Consensus } from './services/magiEngine';
 import { fetchDocumentFromUrl, extractUrls, FetchedDocument } from './services/docFetcher';
 import { updateAppDynamicIcon } from './services/dynamicIconService';
+import {
+  loadSessions,
+  saveSession,
+  deleteSession,
+  clearSessions,
+  formatConsensusSummary,
+  exportSessionToMarkdown,
+  downloadMarkdownFile
+} from './services/historyService';
 import { MagiHeader } from './components/MagiHeader';
 import { DeliberationPhaseBar } from './components/DeliberationPhaseBar';
 import { MagiTriadView } from './components/MagiTriadView';
@@ -17,7 +27,8 @@ import { DeliberationFlowGraph } from './components/DeliberationFlowGraph';
 import { ConsensusReportView } from './components/ConsensusReportView';
 import { ProtocolLogsInspector } from './components/ProtocolLogsInspector';
 import { SettingsModal } from './components/SettingsModal';
-import { Send, Terminal, HelpCircle, Link as LinkIcon, FileText, X, Globe, Loader2 } from 'lucide-react';
+import { HistoryDrawer } from './components/HistoryDrawer';
+import { Send, Terminal, HelpCircle, Link as LinkIcon, FileText, X, Globe, Loader2, RotateCcw, GitCommit } from 'lucide-react';
 
 const STORAGE_KEY_SETTINGS = 'MAGI_SETTINGS_V2';
 
@@ -52,6 +63,12 @@ export const App: React.FC = () => {
   const [showDocPreview, setShowDocPreview] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
+  // History & Follow-up States
+  const [sessions, setSessions] = useState<DeliberationSession[]>(() => loadSessions());
+  const [isHistoryOpen, setIsHistoryOpen] = useState(false);
+  const [currentSessionId, setCurrentSessionId] = useState<string | undefined>(undefined);
+  const [parentSession, setParentSession] = useState<DeliberationSession | null>(null);
+
   const [selectedMode, setSelectedMode] = useState<DeliberationMode>('AUTO');
 
   const [state, setState] = useState<DeliberationState>({
@@ -65,6 +82,7 @@ export const App: React.FC = () => {
 
   const [logs, setLogs] = useState<ProtocolLog[]>([]);
   const consensusRef = useRef<HTMLDivElement>(null);
+  const queryInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY_SETTINGS, JSON.stringify(settings));
@@ -144,12 +162,12 @@ export const App: React.FC = () => {
     const deliberationId = `DELIB-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
     const resolvedMode = selectedMode === 'AUTO' ? detectDeliberationMode(query) : selectedMode;
 
-    // Handle document context isolation for this session
+    const parentConsensusSummary = parentSession ? formatConsensusSummary(parentSession) : undefined;
+
     let currentDoc: FetchedDocument | null = null;
     const detectedUrls = extractUrls(query);
 
     if (detectedUrls.length > 0) {
-      // Priority 1: URL in the query itself
       const targetUrl = detectedUrls[0];
       try {
         setIsFetchingDoc(true);
@@ -178,10 +196,8 @@ export const App: React.FC = () => {
         setIsFetchingDoc(false);
       }
     } else if (attachedDoc && urlInput.trim() && attachedDoc.url === urlInput.trim()) {
-      // Priority 2: Use manually attached doc ONLY if it matches the current URL input box
       currentDoc = attachedDoc;
     } else {
-      // Priority 3: Clear any stale document from previous runs
       currentDoc = null;
       setAttachedDoc(null);
     }
@@ -189,7 +205,7 @@ export const App: React.FC = () => {
     addLog({
       source: 'SYSTEM',
       phase: 'INITIATE',
-      text: `新合議プロトコル起動 (${deliberationId}) [MODE: ${resolvedMode}] - 議題: "${query.slice(0, 50)}..."${currentDoc ? ` (参照ドキュメント: ${currentDoc.title})` : ''}`,
+      text: `新合議プロトコル起動 (${deliberationId}) [MODE: ${resolvedMode}]${parentSession ? ` [継続審議 FROM: ${parentSession.id}]` : ''} - 議題: "${query.slice(0, 50)}..."${currentDoc ? ` (参照ドキュメント: ${currentDoc.title})` : ''}`,
       type: 'info',
     });
 
@@ -202,14 +218,23 @@ export const App: React.FC = () => {
       activeMagiStatus: { MELCHIOR: 'IDLE', BALTHASAR: 'IDLE', CASPAR: 'IDLE' },
       initialOutputs: {},
       deliberationOutputs: {},
+      parentSessionId: parentSession?.id,
+      parentConsensusSummary: parentConsensusSummary,
     });
 
     try {
       // PHASE 1: Initial Proposals
-      const initial = await runPhase1Initial(query, settings, {
-        onLog: addLog,
-        onMagiStatusChange: handleMagiStatusChange,
-      }, currentDoc || undefined, deliberationId);
+      const initial = await runPhase1Initial(
+        query,
+        settings,
+        {
+          onLog: addLog,
+          onMagiStatusChange: handleMagiStatusChange,
+        },
+        currentDoc || undefined,
+        deliberationId,
+        parentConsensusSummary
+      );
 
       setState((prev) => ({ ...prev, initialOutputs: initial }));
 
@@ -218,26 +243,62 @@ export const App: React.FC = () => {
       // PHASE 2: Cross Debate (If Enabled)
       if (settings.enableDeliberation) {
         setState((prev) => ({ ...prev, step: 'PHASE_2_DEBATE' }));
-        const debateResults = await runPhase2Debate(query, initial, settings, {
-          onLog: addLog,
-          onMagiStatusChange: handleMagiStatusChange,
-        }, currentDoc || undefined, deliberationId);
+        const debateResults = await runPhase2Debate(
+          query,
+          initial,
+          settings,
+          {
+            onLog: addLog,
+            onMagiStatusChange: handleMagiStatusChange,
+          },
+          currentDoc || undefined,
+          deliberationId,
+          parentConsensusSummary
+        );
         delibOutputs = debateResults;
         setState((prev) => ({ ...prev, deliberationOutputs: debateResults }));
       }
 
       // PHASE 3: Synthesis & Vote
       setState((prev) => ({ ...prev, step: 'PHASE_3_CONSENSUS' }));
-      const consensus = await runPhase3Consensus(query, initial, delibOutputs as any, settings, {
-        onLog: addLog,
-        onMagiStatusChange: handleMagiStatusChange,
-      }, deliberationId, resolvedMode);
+      const consensus = await runPhase3Consensus(
+        query,
+        initial,
+        delibOutputs as any,
+        settings,
+        {
+          onLog: addLog,
+          onMagiStatusChange: handleMagiStatusChange,
+        },
+        deliberationId,
+        resolvedMode,
+        parentConsensusSummary
+      );
 
       setState((prev) => ({
         ...prev,
         step: 'COMPLETED',
         consensus: consensus,
       }));
+
+      // Save to Deliberation Archives
+      const newSession: DeliberationSession = {
+        id: deliberationId,
+        timestamp: new Date().toLocaleString(),
+        query: query,
+        mode: selectedMode,
+        attachedDoc: currentDoc || undefined,
+        initialOutputs: initial,
+        deliberationOutputs: delibOutputs as any,
+        consensus: consensus,
+        logs: [],
+        parentSessionId: parentSession?.id,
+        parentConsensusSummary: parentConsensusSummary,
+      };
+      const updated = saveSession(newSession);
+      setSessions(updated);
+      setCurrentSessionId(deliberationId);
+      setParentSession(null);
 
     } catch (err: any) {
       addLog({
@@ -254,6 +315,66 @@ export const App: React.FC = () => {
     }
   };
 
+  const handleExportSessionMarkdown = (session: DeliberationSession) => {
+    const md = exportSessionToMarkdown(session);
+    const safeTitle = session.query.replace(/[/\\?%*:|"<>]/g, '_').slice(0, 30);
+    const filename = `MAGI_REPORT_${session.id}_${safeTitle}.md`;
+    downloadMarkdownFile(filename, md);
+  };
+
+  const handleSelectSessionFromHistory = (session: DeliberationSession) => {
+    setState({
+      step: 'COMPLETED',
+      mode: session.mode,
+      query: session.query,
+      attachedDoc: session.attachedDoc,
+      activeMagiStatus: { MELCHIOR: 'DONE', BALTHASAR: 'DONE', CASPAR: 'DONE' },
+      initialOutputs: session.initialOutputs,
+      deliberationOutputs: session.deliberationOutputs,
+      consensus: session.consensus,
+    });
+    setLogs(session.logs || []);
+    setQueryInput(session.query);
+    setCurrentSessionId(session.id);
+    setParentSession(null);
+  };
+
+  const handleStartFollowUpFromSession = (session: DeliberationSession) => {
+    setParentSession(session);
+    setQueryInput('');
+    if (queryInputRef.current) {
+      queryInputRef.current.focus();
+    }
+  };
+
+  const handleDeleteSession = (id: string) => {
+    const updated = deleteSession(id);
+    setSessions(updated);
+    if (currentSessionId === id) {
+      setCurrentSessionId(undefined);
+    }
+  };
+
+  const handleClearAllSessions = () => {
+    clearSessions();
+    setSessions([]);
+    setCurrentSessionId(undefined);
+  };
+
+  const getCurrentOrActiveSession = (): DeliberationSession => {
+    return sessions.find(s => s.id === currentSessionId) || {
+      id: currentSessionId || `DELIB-${Date.now()}`,
+      timestamp: new Date().toLocaleString(),
+      query: state.query,
+      mode: state.mode,
+      attachedDoc: state.attachedDoc,
+      initialOutputs: state.initialOutputs,
+      deliberationOutputs: state.deliberationOutputs,
+      consensus: state.consensus!,
+      logs: logs
+    };
+  };
+
   const handleReset = () => {
     setState({
       step: 'IDLE',
@@ -266,6 +387,7 @@ export const App: React.FC = () => {
     setAttachedDoc(null);
     setUrlInput('');
     setLogs([]);
+    setParentSession(null);
   };
 
   const isBusy = state.step !== 'IDLE' && state.step !== 'COMPLETED' && state.step !== 'ERROR';
@@ -280,6 +402,7 @@ export const App: React.FC = () => {
         settings={settings}
         step={state.step}
         onOpenSettings={() => setIsSettingsOpen(true)}
+        onOpenHistory={() => setIsHistoryOpen(true)}
         onReset={handleReset}
         onToggleDeliberationMode={() =>
           setSettings((prev) => ({ ...prev, enableDeliberation: !prev.enableDeliberation }))
@@ -321,12 +444,33 @@ export const App: React.FC = () => {
               </div>
             </div>
 
+            {/* Parent Session Follow-up Banner */}
+            {parentSession && (
+              <div className="p-3 bg-magi-orange/15 border border-magi-orange/50 rounded flex items-center justify-between text-xs font-mono-nerv animate-in fade-in">
+                <div className="flex items-center space-x-2 truncate">
+                  <GitCommit className="w-4 h-4 text-magi-orange shrink-0" />
+                  <span className="text-magi-orange font-bold">継続審議コンテキスト適用中:</span>
+                  <span className="text-white font-semibold truncate">{parentSession.query}</span>
+                  <span className="text-slate-400 text-[10px]">({parentSession.id})</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setParentSession(null)}
+                  className="p-1 text-slate-400 hover:text-magi-red transition-colors"
+                  title="継続審議コンテキストを解除"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            )}
+
             <div className="flex flex-col sm:flex-row gap-3">
               <input
+                ref={queryInputRef}
                 type="text"
                 value={queryInput}
                 onChange={(e) => setQueryInput(e.target.value)}
-                placeholder="マギシステムに可否の判断・合議を仰ぎたい議題を入力してください... (URLを含めることも可能です)"
+                placeholder={parentSession ? "前回の合議結果を踏まえた、追加の質問・アジェンダを入力..." : "マギシステムに可否の判断・合議を仰ぎたい議題を入力してください... (URLを含めることも可能です)"}
                 disabled={isBusy}
                 className="flex-1 bg-black/60 border border-slate-700 rounded-lg px-4 py-3 text-sm font-sans text-white placeholder-slate-500 focus:border-magi-orange focus:outline-none transition-all"
                 onKeyDown={(e) => {
@@ -342,7 +486,7 @@ export const App: React.FC = () => {
                 className="flex items-center justify-center space-x-2 px-6 py-3 rounded-lg bg-magi-orange text-black font-mono-nerv font-bold hover:bg-orange-500 transition-all glow-orange disabled:opacity-50 shrink-0"
               >
                 <Send className={`w-4 h-4 ${isBusy ? 'animate-bounce' : ''}`} />
-                <span>{isBusy ? 'DELIBERATING...' : 'INITIATE CONSENSUS'}</span>
+                <span>{isBusy ? 'DELIBERATING...' : parentSession ? 'CONTINUE CONSENSUS' : 'INITIATE CONSENSUS'}</span>
               </button>
             </div>
 
@@ -441,7 +585,11 @@ export const App: React.FC = () => {
         {/* Final Consensus Report (rendered prominently at top when completed) */}
         {state.consensus && (
           <div ref={consensusRef} className="animate-in fade-in slide-in-from-top-4 duration-500">
-            <ConsensusReportView consensus={state.consensus} />
+            <ConsensusReportView
+              consensus={state.consensus}
+              onStartFollowUp={() => handleStartFollowUpFromSession(getCurrentOrActiveSession())}
+              onExportMarkdown={() => handleExportSessionMarkdown(getCurrentOrActiveSession())}
+            />
           </div>
         )}
 
@@ -470,6 +618,19 @@ export const App: React.FC = () => {
           onClose={() => setIsSettingsOpen(false)}
         />
       )}
+
+      {/* Deliberation History Drawer */}
+      <HistoryDrawer
+        isOpen={isHistoryOpen}
+        onClose={() => setIsHistoryOpen(false)}
+        sessions={sessions}
+        currentSessionId={currentSessionId}
+        onSelectSession={handleSelectSessionFromHistory}
+        onStartFollowUp={handleStartFollowUpFromSession}
+        onExportMarkdown={handleExportSessionMarkdown}
+        onDeleteSession={handleDeleteSession}
+        onClearAll={handleClearAllSessions}
+      />
     </div>
   );
 };

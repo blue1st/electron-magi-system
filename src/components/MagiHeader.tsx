@@ -1,5 +1,5 @@
 import React from 'react';
-import { Settings as SettingsIcon, Cpu, RefreshCw, Zap, Layers, Activity } from 'lucide-react';
+import { Settings as SettingsIcon, Cpu, RefreshCw, Zap, Layers, Activity, History } from 'lucide-react';
 import { Settings, DeliberationStep } from '../types';
 import pkg from '../../package.json';
 
@@ -7,6 +7,7 @@ interface MagiHeaderProps {
   settings: Settings;
   step: DeliberationStep;
   onOpenSettings: () => void;
+  onOpenHistory: () => void;
   onReset: () => void;
   onToggleDeliberationMode: () => void;
 }
@@ -15,6 +16,7 @@ export const MagiHeader: React.FC<MagiHeaderProps> = ({
   settings,
   step,
   onOpenSettings,
+  onOpenHistory,
   onReset,
   onToggleDeliberationMode,
 }) => {
@@ -124,6 +126,15 @@ export const MagiHeader: React.FC<MagiHeaderProps> = ({
 
       {/* Actions */}
       <div className="flex items-center space-x-2.5 app-no-drag">
+        <button
+          onClick={onOpenHistory}
+          className="flex items-center space-x-1.5 text-xs font-mono-nerv px-3 py-2 rounded bg-black/50 text-slate-300 border border-slate-800 hover:border-magi-orange/50 hover:text-magi-orange hover:bg-black/80 transition-all"
+          title="合議セッション履歴（アーカイブ）を開く"
+        >
+          <History className="w-4 h-4 text-magi-orange" />
+          <span className="hidden sm:inline">HISTORIES</span>
+        </button>
+
         <button
           onClick={onReset}
           disabled={isBusy}

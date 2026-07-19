@@ -93,6 +93,22 @@ export interface DeliberationState {
   deliberationOutputs: Partial<Record<MagiId, MagiDeliberationOutput>>;
   consensus?: ConsensusResult;
   error?: string;
+  parentSessionId?: string;
+  parentConsensusSummary?: string;
+}
+
+export interface DeliberationSession {
+  id: string;
+  timestamp: string;
+  query: string;
+  mode: DeliberationMode;
+  attachedDoc?: FetchedDocument;
+  initialOutputs: Partial<Record<MagiId, MagiInitialOutput>>;
+  deliberationOutputs: Partial<Record<MagiId, MagiDeliberationOutput>>;
+  consensus: ConsensusResult;
+  logs: ProtocolLog[];
+  parentSessionId?: string;
+  parentConsensusSummary?: string;
 }
 
 export interface ProtocolLog {
