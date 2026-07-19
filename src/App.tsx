@@ -8,6 +8,7 @@ import {
 import { DEFAULT_PERSONALITIES } from './config/defaultPrompts';
 import { runPhase1Initial, runPhase2Debate, runPhase3Consensus } from './services/magiEngine';
 import { fetchDocumentFromUrl, extractUrls, FetchedDocument } from './services/docFetcher';
+import { updateAppDynamicIcon } from './services/dynamicIconService';
 import { MagiHeader } from './components/MagiHeader';
 import { DeliberationPhaseBar } from './components/DeliberationPhaseBar';
 import { MagiTriadView } from './components/MagiTriadView';
@@ -63,6 +64,10 @@ export const App: React.FC = () => {
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY_SETTINGS, JSON.stringify(settings));
   }, [settings]);
+
+  useEffect(() => {
+    updateAppDynamicIcon(state.step);
+  }, [state.step]);
 
   const addLog = (log: Omit<ProtocolLog, 'id' | 'timestamp'>) => {
     const newLog: ProtocolLog = {

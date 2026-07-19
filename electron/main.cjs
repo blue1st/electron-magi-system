@@ -1,4 +1,4 @@
-const { app, BrowserWindow, shell } = require('electron');
+const { app, BrowserWindow, shell, ipcMain, nativeImage } = require('electron');
 const path = require('path');
 
 let mainWindow;
@@ -34,6 +34,23 @@ function createWindow() {
     return { action: 'deny' };
   });
 }
+
+// Dynamic Dock Icon IPC Listener
+ipcMain.on('update-dock-icon', (event, { dataUrl }) => {
+  try {
+    if (dataUrl) {
+      const img = nativeImage.createFromDataURL(dataUrl);
+      if (process.platform === 'darwin' && app.dock) {
+        app.dock.setIcon(img);
+      }
+      if (mainWindow) {
+        mainWindow.setIcon(img);
+      }
+    }
+  } catch (err) {
+    console.error('Failed to update dynamic dock icon:', err);
+  }
+});
 
 app.whenReady().then(() => {
   createWindow();
