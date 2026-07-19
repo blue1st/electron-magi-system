@@ -4,6 +4,8 @@ export type MagiId = 'MELCHIOR' | 'BALTHASAR' | 'CASPAR';
 
 export type DecisionVote = 'APPROVAL' | 'DENIED' | 'CONDITIONAL';
 
+export type DeliberationMode = 'AUTO' | 'DECISION' | 'COMPARISON' | 'STRATEGY';
+
 export interface MagiPersonality {
   id: MagiId;
   name: string;
@@ -29,6 +31,7 @@ export interface MagiInitialOutput {
   magiId: MagiId;
   reasoning: string;
   initialVote: DecisionVote;
+  stanceLabel?: string; // Flexible stance label e.g. "React (推奨)" or "技術刷新案"
   conditions?: string;
   rawResponse: string;
 }
@@ -37,6 +40,7 @@ export interface MagiDeliberationOutput {
   magiId: MagiId;
   refinements: string; // Comments on other MAGIs' points
   revisedVote: DecisionVote;
+  revisedStanceLabel?: string;
   finalArgument: string;
   rawResponse: string;
 }
@@ -45,6 +49,8 @@ export interface OpinionShift {
   magiId: MagiId;
   fromVote: DecisionVote;
   toVote: DecisionVote;
+  fromStanceLabel?: string;
+  toStanceLabel?: string;
   hasShifted: boolean;
   reasonForShift: string;
 }
@@ -57,8 +63,10 @@ export interface PersuasionLink {
 }
 
 export interface ConsensusResult {
-  finalDecision: DecisionVote | 'SPLIT_DECISION';
-  voteCounts: {
+  mode: DeliberationMode;
+  finalDecision: DecisionVote | 'SPLIT_DECISION' | string;
+  finalStanceLabel?: string;
+  voteCounts?: {
     APPROVAL: number;
     DENIED: number;
     CONDITIONAL: number;
@@ -76,6 +84,8 @@ export type DeliberationStep = 'IDLE' | 'PHASE_1_INITIAL' | 'PHASE_2_DEBATE' | '
 
 export interface DeliberationState {
   step: DeliberationStep;
+  mode: DeliberationMode;
+  resolvedMode?: 'DECISION' | 'COMPARISON' | 'STRATEGY';
   query: string;
   attachedDoc?: FetchedDocument;
   activeMagiStatus: Record<MagiId, 'IDLE' | 'THINKING' | 'DONE' | 'ERROR'>;

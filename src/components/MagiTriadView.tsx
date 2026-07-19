@@ -10,28 +10,30 @@ interface MagiTriadViewProps {
 export const MagiTriadView: React.FC<MagiTriadViewProps> = ({ settings, state }) => {
   const magiOrder: MagiId[] = ['MELCHIOR', 'BALTHASAR', 'CASPAR'];
 
-  const getVoteBadge = (vote?: DecisionVote) => {
+  const getVoteBadge = (vote?: DecisionVote, stanceLabel?: string) => {
     if (!vote) return null;
+    const labelText = stanceLabel ? `${stanceLabel}` : vote === 'APPROVAL' ? 'APPROVAL (可決)' : vote === 'DENIED' ? 'DENIED (否決)' : 'CONDITIONAL (条件可決)';
     switch (vote) {
       case 'APPROVAL':
         return (
           <span className="inline-flex items-center space-x-1 text-xs font-mono-nerv px-2 py-0.5 rounded bg-magi-green/20 text-magi-green border border-magi-green/60 glow-green">
-            <CheckCircle2 className="w-3 h-3" />
-            <span>APPROVAL (可決)</span>
+            <CheckCircle2 className="w-3 h-3 shrink-0" />
+            <span className="truncate max-w-[200px]">{labelText}</span>
           </span>
         );
       case 'DENIED':
         return (
           <span className="inline-flex items-center space-x-1 text-xs font-mono-nerv px-2 py-0.5 rounded bg-magi-red/20 text-magi-red border border-magi-red/60 glow-red">
-            <ShieldAlert className="w-3 h-3" />
-            <span>DENIED (否決)</span>
+            <ShieldAlert className="w-3 h-3 shrink-0" />
+            <span className="truncate max-w-[200px]">{labelText}</span>
           </span>
         );
       case 'CONDITIONAL':
+      default:
         return (
           <span className="inline-flex items-center space-x-1 text-xs font-mono-nerv px-2 py-0.5 rounded bg-magi-yellow/20 text-magi-yellow border border-magi-yellow/60">
-            <AlertTriangle className="w-3 h-3" />
-            <span>CONDITIONAL (保留/条件可決)</span>
+            <AlertTriangle className="w-3 h-3 shrink-0" />
+            <span className="truncate max-w-[200px]">{labelText}</span>
           </span>
         );
     }
@@ -90,7 +92,7 @@ export const MagiTriadView: React.FC<MagiTriadViewProps> = ({ settings, state })
                     <span>ANALYZING QUERY...</span>
                   </div>
                 ) : currentVote ? (
-                  getVoteBadge(currentVote)
+                  getVoteBadge(currentVote, delibOutput?.revisedStanceLabel || initOutput?.stanceLabel)
                 ) : (
                   <span className="text-xs font-mono-nerv text-slate-500">STANDBY</span>
                 )}

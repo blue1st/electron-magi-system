@@ -2,10 +2,11 @@ import React, { useState, useEffect } from 'react';
 import {
   Settings,
   DeliberationState,
+  DeliberationMode,
   ProtocolLog,
   MagiId
 } from './types';
-import { DEFAULT_PERSONALITIES } from './config/defaultPrompts';
+import { DEFAULT_PERSONALITIES, detectDeliberationMode } from './config/defaultPrompts';
 import { runPhase1Initial, runPhase2Debate, runPhase3Consensus } from './services/magiEngine';
 import { fetchDocumentFromUrl, extractUrls, FetchedDocument } from './services/docFetcher';
 import { updateAppDynamicIcon } from './services/dynamicIconService';
@@ -51,8 +52,11 @@ export const App: React.FC = () => {
   const [showDocPreview, setShowDocPreview] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
+  const [selectedMode, setSelectedMode] = useState<DeliberationMode>('AUTO');
+
   const [state, setState] = useState<DeliberationState>({
     step: 'IDLE',
+    mode: 'AUTO',
     query: '',
     activeMagiStatus: { MELCHIOR: 'IDLE', BALTHASAR: 'IDLE', CASPAR: 'IDLE' },
     initialOutputs: {},
@@ -131,6 +135,7 @@ export const App: React.FC = () => {
     setLogs([]);
 
     const deliberationId = `DELIB-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    const resolvedMode = selectedMode === 'AUTO' ? detectDeliberationMode(query) : selectedMode;
 
     // Handle document context isolation for this session
     let currentDoc: FetchedDocument | null = null;
@@ -177,12 +182,14 @@ export const App: React.FC = () => {
     addLog({
       source: 'SYSTEM',
       phase: 'INITIATE',
-      text: `新合議プロトコル起動 (${deliberationId}) - 議題: "${query.slice(0, 50)}..."${currentDoc ? ` (参照ドキュメント: ${currentDoc.title})` : ''}`,
+      text: `新合議プロトコル起動 (${deliberationId}) [MODE: ${resolvedMode}] - 議題: "${query.slice(0, 50)}..."${currentDoc ? ` (参照ドキュメント: ${currentDoc.title})` : ''}`,
       type: 'info',
     });
 
     setState({
       step: 'PHASE_1_INITIAL',
+      mode: selectedMode,
+      resolvedMode: resolvedMode,
       query: query,
       attachedDoc: currentDoc || undefined,
       activeMagiStatus: { MELCHIOR: 'IDLE', BALTHASAR: 'IDLE', CASPAR: 'IDLE' },
@@ -217,7 +224,7 @@ export const App: React.FC = () => {
       const consensus = await runPhase3Consensus(query, initial, delibOutputs as any, settings, {
         onLog: addLog,
         onMagiStatusChange: handleMagiStatusChange,
-      }, deliberationId);
+      }, deliberationId, resolvedMode);
 
       setState((prev) => ({
         ...prev,
@@ -243,6 +250,7 @@ export const App: React.FC = () => {
   const handleReset = () => {
     setState({
       step: 'IDLE',
+      mode: selectedMode,
       query: '',
       activeMagiStatus: { MELCHIOR: 'IDLE', BALTHASAR: 'IDLE', CASPAR: 'IDLE' },
       initialOutputs: {},
@@ -279,12 +287,31 @@ export const App: React.FC = () => {
         {/* Input Query Bar */}
         <div className="bg-magi-card/90 border border-slate-700/80 rounded-lg p-5 mb-6 shadow-xl space-y-4">
           <form onSubmit={handleStartDeliberation} className="space-y-4">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <label className="flex items-center space-x-2 text-xs font-mono-nerv text-magi-orange font-bold tracking-wider uppercase">
                 <Terminal className="w-4 h-4" />
                 <span>MAGI SYSTEM AGENDA INPUT (審議題目の入力)</span>
               </label>
-              <span className="text-[11px] font-mono-nerv text-slate-500">CODE: 39 READY</span>
+
+              {/* Protocol Mode Switcher */}
+              <div className="flex items-center space-x-1.5 bg-black/60 p-1 rounded border border-slate-800 text-xs font-mono-nerv">
+                <span className="text-slate-500 px-1 text-[10px] hidden sm:inline">PROTOCOL MODE:</span>
+                {(['AUTO', 'DECISION', 'COMPARISON', 'STRATEGY'] as DeliberationMode[]).map((mode) => (
+                  <button
+                    key={mode}
+                    type="button"
+                    onClick={() => setSelectedMode(mode)}
+                    disabled={isBusy}
+                    className={`px-2 py-1 rounded text-[11px] font-bold transition-all ${
+                      selectedMode === mode
+                        ? 'bg-magi-orange text-black glow-orange'
+                        : 'text-slate-400 hover:text-slate-200'
+                    }`}
+                  >
+                    {mode === 'AUTO' ? '🤖 自動判別' : mode === 'DECISION' ? '⚖️ 可否判定' : mode === 'COMPARISON' ? '🔀 選択肢比較' : '💡 自由提案'}
+                  </button>
+                ))}
+              </div>
             </div>
 
             <div className="flex flex-col sm:flex-row gap-3">

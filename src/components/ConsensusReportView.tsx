@@ -38,6 +38,9 @@ export const ConsensusReportView: React.FC<ConsensusReportViewProps> = ({ consen
   };
 
   const header = getDecisionHeader();
+  const displayTitle = consensus.finalStanceLabel 
+    ? `MAGI SYSTEM JUDGMENT: ${consensus.finalStanceLabel.toUpperCase()}`
+    : header.title;
 
   return (
     <div className="w-full my-6 bg-magi-card/90 border border-slate-700 rounded-lg overflow-hidden shadow-2xl">
@@ -46,23 +49,27 @@ export const ConsensusReportView: React.FC<ConsensusReportViewProps> = ({ consen
         <div className="flex items-center space-x-4">
           {header.icon}
           <div>
-            <span className="text-xs font-mono-nerv uppercase tracking-widest text-slate-300">CODE: 601 • FINAL CONSENSUS</span>
-            <h2 className="text-xl font-bold font-mono-nerv tracking-wide">{header.title}</h2>
+            <span className="text-xs font-mono-nerv uppercase tracking-widest text-slate-300">
+              CODE: 601 • FINAL CONSENSUS {consensus.mode && consensus.mode !== 'AUTO' ? `[${consensus.mode} MODE]` : ''}
+            </span>
+            <h2 className="text-xl font-bold font-mono-nerv tracking-wide">{displayTitle}</h2>
           </div>
         </div>
 
         {/* Tally Stats */}
-        <div className="flex items-center space-x-3 text-xs font-mono-nerv">
-          <div className="px-3 py-1.5 rounded bg-black/60 border border-magi-green/40 text-magi-green">
-            APPROVAL: <span className="font-bold">{consensus.voteCounts.APPROVAL}</span>
+        {consensus.voteCounts && (
+          <div className="flex items-center space-x-3 text-xs font-mono-nerv">
+            <div className="px-3 py-1.5 rounded bg-black/60 border border-magi-green/40 text-magi-green">
+              APPROVAL: <span className="font-bold">{consensus.voteCounts.APPROVAL}</span>
+            </div>
+            <div className="px-3 py-1.5 rounded bg-black/60 border border-magi-red/40 text-magi-red">
+              DENIED: <span className="font-bold">{consensus.voteCounts.DENIED}</span>
+            </div>
+            <div className="px-3 py-1.5 rounded bg-black/60 border border-magi-yellow/40 text-magi-yellow">
+              CONDITIONAL: <span className="font-bold">{consensus.voteCounts.CONDITIONAL}</span>
+            </div>
           </div>
-          <div className="px-3 py-1.5 rounded bg-black/60 border border-magi-red/40 text-magi-red">
-            DENIED: <span className="font-bold">{consensus.voteCounts.DENIED}</span>
-          </div>
-          <div className="px-3 py-1.5 rounded bg-black/60 border border-magi-yellow/40 text-magi-yellow">
-            CONDITIONAL: <span className="font-bold">{consensus.voteCounts.CONDITIONAL}</span>
-          </div>
-        </div>
+        )}
       </div>
 
       {/* Main Body */}

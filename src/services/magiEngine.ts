@@ -5,7 +5,8 @@ import {
   MagiDeliberationOutput,
   ConsensusResult,
   ProtocolLog,
-  DecisionVote
+  DecisionVote,
+  DeliberationMode
 } from '../types';
 import { FetchedDocument } from './docFetcher';
 import { buildFullSystemPrompt, SYSTEM_CONSENSUS_PROMPT } from '../config/defaultPrompts';
@@ -55,8 +56,9 @@ export async function runPhase1Initial(
 
     try {
       const rawRes = await sendChatCompletion(settings, messages, personality.modelOverride);
-      const parsed = extractJsonFromResponse<{ vote?: DecisionVote; reasoning?: string; conditions?: string }>(rawRes, {
+      const parsed = extractJsonFromResponse<{ vote?: DecisionVote; stanceLabel?: string; reasoning?: string; conditions?: string }>(rawRes, {
         vote: 'CONDITIONAL',
+        stanceLabel: '',
         reasoning: rawRes,
         conditions: ''
       });
@@ -66,6 +68,7 @@ export async function runPhase1Initial(
         magiId: id,
         reasoning: parsed.reasoning || rawRes,
         initialVote: vote,
+        stanceLabel: parsed.stanceLabel || (vote === 'APPROVAL' ? '可決' : vote === 'DENIED' ? '否決' : '条件付可決'),
         conditions: parsed.conditions,
         rawResponse: rawRes
       };
@@ -75,7 +78,7 @@ export async function runPhase1Initial(
       callbacks.onLog({
         source: id,
         phase: 'CODE: 39 - PROPOSAL COMPLETE',
-        text: `【初案決議: ${vote}】\n${output.reasoning}${output.conditions ? `\n\n【前提条件】:\n${output.conditions}` : ''}`,
+        text: `【初案主張: ${output.stanceLabel} (${vote})】\n${output.reasoning}${output.conditions ? `\n\n【前提条件】:\n${output.conditions}` : ''}`,
         type: vote === 'APPROVAL' ? 'success' : vote === 'DENIED' ? 'warn' : 'info'
       });
     } catch (err: any) {
@@ -122,7 +125,7 @@ export async function runPhase2Debate(
     const p = settings.personalities[id];
     const out = initialOutputs[id];
     return `■ ${p.name} (${p.role}):
-【個別判定】: ${out.initialVote}
+【初案主張】: ${out.stanceLabel || out.initialVote} (${out.initialVote})
 【分析根拠】: ${out.reasoning}
 ${out.conditions ? `【提示条件】: ${out.conditions}` : ''}`;
   }).join('\n\n');
@@ -150,12 +153,13 @@ ${initialSummary}
 【あなた (${personality.name} / ${personality.role}) への指令】
 議題・参照ドキュメント・他の2つのMAGIの意見を吟味した上で、あなたの視点から以下の点について熟議・反論・補足を行ってください：
 1. 他のMAGIの意見で妥当な点、あるいは過度・見落としている危険な点
-2. 相互議論を経た上での、あなたの【最終修正判定 (revisedVote)】
+2. 相互議論を経た上での、あなたの【最終修正判定 (revisedVote)】および【修正主張ショートラベル (revisedStanceLabel)】
 3. 最終的な判断理由
 
 以下のJSON形式で回答してください：
 {
   "revisedVote": "APPROVAL" | "DENIED" | "CONDITIONAL",
+  "revisedStanceLabel": "あなたの立場・選択・主張のショートラベル (15文字以内)",
   "refinements": "他のMAGIへの同意・反論・懸念・補足コメント",
   "finalArgument": "最終的な主張と判断根拠"
 }`;
@@ -167,8 +171,9 @@ ${initialSummary}
 
     try {
       const rawRes = await sendChatCompletion(settings, messages, personality.modelOverride);
-      const parsed = extractJsonFromResponse<{ revisedVote?: DecisionVote; refinements?: string; finalArgument?: string }>(rawRes, {
+      const parsed = extractJsonFromResponse<{ revisedVote?: DecisionVote; revisedStanceLabel?: string; refinements?: string; finalArgument?: string }>(rawRes, {
         revisedVote: initialOutputs[id].initialVote,
+        revisedStanceLabel: initialOutputs[id].stanceLabel,
         refinements: rawRes,
         finalArgument: rawRes
       });
@@ -178,6 +183,7 @@ ${initialSummary}
         magiId: id,
         refinements: parsed.refinements || rawRes,
         revisedVote: vote,
+        revisedStanceLabel: parsed.revisedStanceLabel || initialOutputs[id].stanceLabel || (vote === 'APPROVAL' ? '可決' : vote === 'DENIED' ? '否決' : '条件付可決'),
         finalArgument: parsed.finalArgument || rawRes,
         rawResponse: rawRes
       };
@@ -187,7 +193,7 @@ ${initialSummary}
       callbacks.onLog({
         source: id,
         phase: 'CODE: 407 - DELIBERATION COMPLETE',
-        text: `【熟議後判定: ${vote}】\n${output.refinements}\n\n【最終主張】:\n${output.finalArgument}`,
+        text: `【熟議後主張: ${output.revisedStanceLabel} (${vote})】\n${output.refinements}\n\n【最終主張】:\n${output.finalArgument}`,
         type: vote === 'APPROVAL' ? 'success' : vote === 'DENIED' ? 'warn' : 'info'
       });
     } catch (err: any) {
@@ -213,7 +219,8 @@ export async function runPhase3Consensus(
   deliberationOutputs: Record<MagiId, MagiDeliberationOutput> | undefined,
   settings: Settings,
   callbacks: MagiEngineCallbacks,
-  deliberationId: string = `SESSION-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
+  deliberationId: string = `SESSION-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+  activeMode: DeliberationMode = 'AUTO'
 ): Promise<ConsensusResult> {
   const coreSessionId = `${deliberationId}-CORE-P3`;
 
@@ -241,9 +248,9 @@ export async function runPhase3Consensus(
     const init = initialOutputs[id];
     const delib = deliberationOutputs ? deliberationOutputs[id] : null;
     return `### ${p.name} (${p.role})
-- 初案判定: ${init.initialVote}
+- 初案主張: ${init.stanceLabel || init.initialVote} (${init.initialVote})
 - 初案根拠: ${init.reasoning}
-${delib ? `- 熟議後判定: ${delib.revisedVote}\n- 熟議論点: ${delib.refinements}\n- 最終主張: ${delib.finalArgument}` : ''}`;
+${delib ? `- 熟議後主張: ${delib.revisedStanceLabel || delib.revisedVote} (${delib.revisedVote})\n- 熟議論点: ${delib.refinements}\n- 最終主張: ${delib.finalArgument}` : ''}`;
   }).join('\n\n');
 
   const sessionIsolationDirective = `\n\n【セッション隔離指示 / UNIT_SESSION_ID: ${coreSessionId}】\n- 本決議統合は完全独立プロセス (SESSION: ${coreSessionId}) 内で行われます。\n- 提示された【議題】および【各MAGIの個別決議と熟議内容】のみに基づいて最終統合レポートを作成してください。`;
@@ -276,19 +283,23 @@ APPROVAL: ${voteCounts.APPROVAL}, DENIED: ${voteCounts.DENIED}, CONDITIONAL: ${v
     else if (voteCounts.CONDITIONAL >= 2) finalDecision = 'CONDITIONAL';
 
     const consensusResult: ConsensusResult = {
+      mode: activeMode,
       finalDecision: parsed.finalDecision || finalDecision,
+      finalStanceLabel: parsed.finalStanceLabel || (typeof parsed.finalDecision === 'string' ? parsed.finalDecision : finalDecision),
       voteCounts: parsed.voteCounts || voteCounts,
       executiveSummary: parsed.executiveSummary || '決議の要約が作成されました。',
       synthesisDetails: parsed.synthesisDetails || rawRes,
       keyDisagreements: parsed.keyDisagreements || [],
       actionableRecommendation: parsed.actionableRecommendation || '状況に応じた対応を推奨します。',
+      opinionShifts: parsed.opinionShifts || [],
+      persuasionLinks: parsed.persuasionLinks || [],
       rawSynthesis: rawRes
     };
 
     callbacks.onLog({
       source: 'MAGI_CORE',
       phase: 'CODE: 601 - JUDGMENT RENDERED',
-      text: `MAGI 決議完了: 【${consensusResult.finalDecision}】 (APPROVAL:${voteCounts.APPROVAL} DENIED:${voteCounts.DENIED} CONDITIONAL:${voteCounts.CONDITIONAL})`,
+      text: `MAGI 決議完了: 【${consensusResult.finalStanceLabel || consensusResult.finalDecision}】 (APPROVAL:${voteCounts.APPROVAL} DENIED:${voteCounts.DENIED} CONDITIONAL:${voteCounts.CONDITIONAL})`,
       type: consensusResult.finalDecision === 'APPROVAL' ? 'success' : 'warn'
     });
 
@@ -302,12 +313,16 @@ APPROVAL: ${voteCounts.APPROVAL}, DENIED: ${voteCounts.DENIED}, CONDITIONAL: ${v
     });
 
     return {
+      mode: activeMode,
       finalDecision: voteCounts.APPROVAL >= 2 ? 'APPROVAL' : voteCounts.DENIED >= 2 ? 'DENIED' : 'CONDITIONAL',
+      finalStanceLabel: voteCounts.APPROVAL >= 2 ? '可決' : voteCounts.DENIED >= 2 ? '否決' : '条件付可決',
       voteCounts,
       executiveSummary: 'MAGIシステム統合処理中に通信障害が発生しましたが、個別得票率により自動決定されました。',
       synthesisDetails: '自動統合結果',
       keyDisagreements: [],
       actionableRecommendation: '通信状態を確認の上、必要に応じて再熟議を行ってください。',
+      opinionShifts: [],
+      persuasionLinks: [],
       rawSynthesis: ''
     };
   }
