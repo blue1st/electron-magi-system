@@ -1,6 +1,6 @@
 import React, { useRef, useEffect, useState } from 'react';
 import { ProtocolLog } from '../types';
-import { Terminal, X, Copy, Check } from 'lucide-react';
+import { Terminal, X, Copy, Check, ChevronDown, ChevronUp } from 'lucide-react';
 
 interface ProtocolLogsInspectorProps {
   logs: ProtocolLog[];
@@ -10,10 +10,13 @@ export const ProtocolLogsInspector: React.FC<ProtocolLogsInspectorProps> = ({ lo
   const bottomRef = useRef<HTMLDivElement>(null);
   const [selectedLog, setSelectedLog] = useState<ProtocolLog | null>(null);
   const [copied, setCopied] = useState(false);
+  const [isMinimized, setIsMinimized] = useState(false);
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [logs]);
+    if (!isMinimized) {
+      bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [logs, isMinimized]);
 
   const handleCopy = (text: string) => {
     navigator.clipboard.writeText(text);
@@ -24,47 +27,64 @@ export const ProtocolLogsInspector: React.FC<ProtocolLogsInspectorProps> = ({ lo
   if (logs.length === 0) return null;
 
   return (
-    <div className="w-full bg-black/80 border border-slate-800 rounded-lg overflow-hidden my-4">
-      <div className="px-4 py-2 bg-slate-900/90 border-b border-slate-800 flex items-center justify-between text-xs font-mono-nerv text-slate-400">
+    <div className="w-full bg-black/85 border border-slate-800 rounded-lg overflow-hidden shadow-2xl">
+      <div 
+        className="px-4 py-2 bg-slate-900/90 border-b border-slate-800 flex items-center justify-between text-xs font-mono-nerv text-slate-400 cursor-pointer select-none"
+        onClick={() => setIsMinimized(!isMinimized)}
+      >
         <div className="flex items-center space-x-2">
           <Terminal className="w-4 h-4 text-magi-orange" />
           <span className="text-slate-200 font-bold">MAGI PROTOCOL LOG INSPECTOR</span>
-          <span className="text-[10px] text-slate-500">(Click log entry to view full text)</span>
+          {!isMinimized && <span className="text-[10px] text-slate-500">(Click log entry to view full text)</span>}
         </div>
-        <div className="flex items-center space-x-2">
-          <span className="w-2 h-2 rounded-full bg-magi-green animate-ping" />
-          <span>REALTIME TELEMETRY</span>
+        <div className="flex items-center space-x-3">
+          <div className="flex items-center space-x-1.5">
+            <span className="w-2 h-2 rounded-full bg-magi-green animate-ping" />
+            <span>REALTIME TELEMETRY</span>
+          </div>
+          <button 
+            type="button" 
+            className="p-0.5 hover:text-white transition-colors"
+            onClick={(e) => {
+              e.stopPropagation();
+              setIsMinimized(!isMinimized);
+            }}
+          >
+            {isMinimized ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+          </button>
         </div>
       </div>
 
-      <div className="p-4 max-h-48 overflow-y-auto space-y-1.5 font-mono-nerv text-xs select-text">
-        {logs.map((log) => {
-          const isSystem = log.source === 'SYSTEM' || log.source === 'MAGI_CORE';
-          const colorClass =
-            log.type === 'success'
-              ? 'text-magi-green'
-              : log.type === 'warn'
-              ? 'text-magi-red'
-              : isSystem
-              ? 'text-magi-cyan'
-              : 'text-magi-orange';
+      {!isMinimized && (
+        <div className="p-4 max-h-36 overflow-y-auto space-y-1.5 font-mono-nerv text-xs select-text">
+          {logs.map((log) => {
+            const isSystem = log.source === 'SYSTEM' || log.source === 'MAGI_CORE';
+            const colorClass =
+              log.type === 'success'
+                ? 'text-magi-green'
+                : log.type === 'warn'
+                ? 'text-magi-red'
+                : isSystem
+                ? 'text-magi-cyan'
+                : 'text-magi-orange';
 
-          return (
-            <div
-              key={log.id}
-              onClick={() => setSelectedLog(log)}
-              className="flex items-start space-x-3 leading-relaxed hover:bg-slate-900/80 px-2 py-1 rounded cursor-pointer border border-transparent hover:border-slate-700/80 transition-all"
-              title="クリックで全文を表示"
-            >
-              <span className="text-slate-600 shrink-0">[{log.timestamp}]</span>
-              <span className={`font-bold shrink-0 w-24 ${colorClass}`}>{log.source}</span>
-              <span className="text-slate-500 shrink-0">[{log.phase}]</span>
-              <span className="text-slate-300 truncate">{log.text.replace(/\n+/g, ' ')}</span>
-            </div>
-          );
-        })}
-        <div ref={bottomRef} />
-      </div>
+            return (
+              <div
+                key={log.id}
+                onClick={() => setSelectedLog(log)}
+                className="flex items-start space-x-3 leading-relaxed hover:bg-slate-900/80 px-2 py-1 rounded cursor-pointer border border-transparent hover:border-slate-700/80 transition-all"
+                title="クリックで全文を表示"
+              >
+                <span className="text-slate-600 shrink-0">[{log.timestamp}]</span>
+                <span className={`font-bold shrink-0 w-24 ${colorClass}`}>{log.source}</span>
+                <span className="text-slate-500 shrink-0">[{log.phase}]</span>
+                <span className="text-slate-300 truncate">{log.text.replace(/\n+/g, ' ')}</span>
+              </div>
+            );
+          })}
+          <div ref={bottomRef} />
+        </div>
+      )}
 
       {/* Full Log Detail Modal */}
       {selectedLog && (

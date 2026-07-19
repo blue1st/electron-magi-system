@@ -265,7 +265,7 @@ export const App: React.FC = () => {
       <DeliberationPhaseBar step={state.step} enableDeliberation={settings.enableDeliberation} />
 
       {/* Main Content Scrollable Container */}
-      <main className="flex-1 overflow-y-auto max-w-7xl w-full mx-auto p-6 flex flex-col z-20">
+      <main className="flex-1 min-h-0 overflow-y-auto max-w-7xl w-full mx-auto p-6 flex flex-col z-20">
         {/* Input Query Bar */}
         <div className="bg-magi-card/90 border border-slate-700/80 rounded-lg p-5 mb-6 shadow-xl space-y-4">
           <form onSubmit={handleStartDeliberation} className="space-y-4">
@@ -401,9 +401,14 @@ export const App: React.FC = () => {
         {/* Final Consensus Report */}
         {state.consensus && <ConsensusReportView consensus={state.consensus} />}
 
-        {/* Protocol Logs */}
-        <ProtocolLogsInspector logs={logs} />
       </main>
+
+      {/* Protocol Logs */}
+      {logs.length > 0 && (
+        <div className="px-6 pb-6 w-full max-w-7xl mx-auto z-20 shrink-0">
+          <ProtocolLogsInspector logs={logs} />
+        </div>
+      )}
 
       {/* Settings Modal */}
       {isSettingsOpen && (
