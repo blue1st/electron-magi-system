@@ -76,7 +76,7 @@ brew install magi-system
 
 ### リポジトリのクローン & パッケージのインストール
 ```bash
-git clone https://github.com/blue1st/magi-system.git
+git clone https://github.com/blue1st/electron-magi-system.git
 cd magi-system
 npm install
 ```

@@ -76,10 +76,10 @@ jobs:
             version "${VERSION}"
             sha256 "${SHA256}"
 
-            url "https://github.com/blue1st/magi-system/releases/download/v#{version}/${ZIP_NAME}"
+            url "https://github.com/blue1st/electron-magi-system/releases/download/v#{version}/${ZIP_NAME}"
             name "MAGI System"
             desc "Tripartite Consensus AI Deliberation System for Electron"
-            homepage "https://github.com/blue1st/magi-system"
+            homepage "https://github.com/blue1st/electron-magi-system"
 
             app "MAGI System.app"
 
