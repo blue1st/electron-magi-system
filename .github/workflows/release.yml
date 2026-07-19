@@ -53,9 +53,11 @@ jobs:
           
           # Find zip artifact and compute SHA256
           ZIP_FILE=$(ls release/*.zip | head -n 1)
+          ZIP_NAME=$(basename "$ZIP_FILE")
           SHA256=$(shasum -a 256 "$ZIP_FILE" | awk '{ print $1 }')
           
           echo "Version: $VERSION"
+          echo "Zip Name: $ZIP_NAME"
           echo "SHA256: $SHA256"
 
           if [ -z "$TAP_GITHUB_TOKEN" ]; then
@@ -78,7 +80,7 @@ jobs:
             version "${VERSION}"
             sha256 "${SHA256}"
 
-            url "https://github.com/blue1st/magi-system/releases/download/v#{version}/MAGI.System-#{version}-mac.zip"
+            url "https://github.com/blue1st/magi-system/releases/download/v#{version}/${ZIP_NAME}"
             name "MAGI System"
             desc "Tripartite Consensus AI Deliberation System for Electron"
             homepage "https://github.com/blue1st/magi-system"

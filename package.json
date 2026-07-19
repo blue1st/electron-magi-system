@@ -35,6 +35,7 @@
     ],
     "mac": {
       "category": "public.app-category.utilities",
+      "artifactName": "MAGI-System-${version}-mac.${ext}",
       "target": [
         {
           "target": "zip",
