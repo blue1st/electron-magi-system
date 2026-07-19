@@ -1,5 +1,13 @@
 
 
+# [1.2.0](https://github.com/blue1st/electron-magi-system/compare/v1.1.0...v1.2.0) (2026-07-19)
+
+
+### Features
+
+* add real-time status indicators and progress UI to DeliberationFlowGraph and MagiHeader for phase-based debate states ([22471a0](https://github.com/blue1st/electron-magi-system/commit/22471a0a13ba2534a8f0089ee6f1e365bcc252d8))
+* implement dynamic app icon updates based on deliberation phase ([060cf65](https://github.com/blue1st/electron-magi-system/commit/060cf65ae0d3fcb274f039ee682077e5b323b6e8))
+
 # 1.1.0 (2026-07-19)
 
 
