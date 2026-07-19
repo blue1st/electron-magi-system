@@ -1,5 +1,7 @@
 
 
+## [1.5.1](https://github.com/blue1st/electron-magi-system/compare/v1.5.0...v1.5.1) (2026-07-19)
+
 # [1.5.0](https://github.com/blue1st/electron-magi-system/compare/v1.4.0...v1.5.0) (2026-07-19)
 
 
