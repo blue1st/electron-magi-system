@@ -18,7 +18,7 @@ import { ProtocolLogsInspector } from './components/ProtocolLogsInspector';
 import { SettingsModal } from './components/SettingsModal';
 import { Send, Terminal, HelpCircle, Link as LinkIcon, FileText, X, Globe, Loader2 } from 'lucide-react';
 
-const STORAGE_KEY_SETTINGS = 'MAGI_SETTINGS_V1';
+const STORAGE_KEY_SETTINGS = 'MAGI_SETTINGS_V2';
 
 const INITIAL_SETTINGS: Settings = {
   baseUrl: 'http://localhost:11434/v1',
