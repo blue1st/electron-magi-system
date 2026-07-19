@@ -44,12 +44,49 @@ export const MagiHeader: React.FC<MagiHeaderProps> = ({
       </div>
 
       {/* Middle Status Indicators */}
-      <div className="hidden md:flex items-center space-x-4 app-no-drag">
+      <div className="hidden md:flex items-center space-x-3.5 app-no-drag">
+        {/* Active System Phase Badge */}
+        <div className="flex items-center space-x-1.5 font-mono-nerv">
+          {step === 'IDLE' && (
+            <span className="px-2.5 py-1 rounded bg-black/60 border border-slate-800 text-slate-500 text-xs">
+              STATUS: STANDBY
+            </span>
+          )}
+          {step === 'PHASE_1_INITIAL' && (
+            <span className="px-2.5 py-1 rounded bg-magi-orange/20 border border-magi-orange text-magi-orange text-xs font-bold animate-pulse glow-orange flex items-center space-x-1.5">
+              <span className="w-2 h-2 rounded-full bg-magi-orange animate-ping" />
+              <span>PHASE 1: 独立分析中</span>
+            </span>
+          )}
+          {step === 'PHASE_2_DEBATE' && (
+            <span className="px-2.5 py-1 rounded bg-magi-cyan/20 border border-magi-cyan text-magi-cyan text-xs font-bold animate-pulse glow-cyan flex items-center space-x-1.5">
+              <span className="w-2 h-2 rounded-full bg-magi-cyan animate-ping" />
+              <span>PHASE 2: 相互熟議中</span>
+            </span>
+          )}
+          {step === 'PHASE_3_CONSENSUS' && (
+            <span className="px-2.5 py-1 rounded bg-magi-yellow/20 border border-magi-yellow text-magi-yellow text-xs font-bold animate-pulse flex items-center space-x-1.5">
+              <span className="w-2 h-2 rounded-full bg-magi-yellow animate-ping" />
+              <span>PHASE 3: 最終合議中</span>
+            </span>
+          )}
+          {step === 'COMPLETED' && (
+            <span className="px-2.5 py-1 rounded bg-magi-green/20 border border-magi-green text-magi-green text-xs font-bold glow-green flex items-center space-x-1">
+              <span>CODE 601: 決議完了</span>
+            </span>
+          )}
+          {step === 'ERROR' && (
+            <span className="px-2.5 py-1 rounded bg-magi-red/20 border border-magi-red text-magi-red text-xs font-bold glow-red">
+              ERROR: SYSTEM FAILURE
+            </span>
+          )}
+        </div>
+
         {/* Endpoint Indicator */}
         <div className="flex items-center space-x-2 text-xs font-mono-nerv bg-black/40 px-3 py-1.5 rounded border border-slate-800">
           <Activity className="w-3.5 h-3.5 text-magi-green" />
           <span className="text-slate-400">ENDPOINT:</span>
-          <span className="text-magi-green font-semibold truncate max-w-[160px]">
+          <span className="text-magi-green font-semibold truncate max-w-[140px]">
             {settings.baseUrl.replace(/^https?:\/\//, '')}
           </span>
         </div>
