@@ -1,5 +1,12 @@
 
 
+# [1.4.0](https://github.com/blue1st/electron-magi-system/compare/v1.3.4...v1.4.0) (2026-07-19)
+
+
+### Features
+
+* add application icons and update README documentation ([c8ec93c](https://github.com/blue1st/electron-magi-system/commit/c8ec93c35520546e2900cf01b357f5f7c259f0f8))
+
 ## [1.3.4](https://github.com/blue1st/electron-magi-system/compare/v1.3.3...v1.3.4) (2026-07-19)
 
 
