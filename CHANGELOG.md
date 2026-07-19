@@ -1,5 +1,12 @@
 
 
+# [1.8.0](https://github.com/blue1st/electron-magi-system/compare/v1.7.0...v1.8.0) (2026-07-19)
+
+
+### Features
+
+* implement persistent session history management and a navigation drawer for past deliberations ([807ca5e](https://github.com/blue1st/electron-magi-system/commit/807ca5e5347bb8f09aeae5cb71e6913a6a5101fe))
+
 # [1.7.0](https://github.com/blue1st/electron-magi-system/compare/v1.6.0...v1.7.0) (2026-07-19)
 
 
