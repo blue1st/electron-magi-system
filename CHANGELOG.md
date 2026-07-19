@@ -1,5 +1,12 @@
 
 
+# [1.6.0](https://github.com/blue1st/electron-magi-system/compare/v1.5.1...v1.6.0) (2026-07-19)
+
+
+### Features
+
+* implement configurable deliberation modes and support custom stance labels for MAGI reports ([8800796](https://github.com/blue1st/electron-magi-system/commit/8800796e5804568d109a79cf6b2d1d95aa8fc409))
+
 ## [1.5.1](https://github.com/blue1st/electron-magi-system/compare/v1.5.0...v1.5.1) (2026-07-19)
 
 # [1.5.0](https://github.com/blue1st/electron-magi-system/compare/v1.4.0...v1.5.0) (2026-07-19)
