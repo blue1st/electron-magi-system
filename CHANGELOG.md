@@ -1,5 +1,12 @@
 
 
+# [1.9.0](https://github.com/blue1st/electron-magi-system/compare/v1.8.0...v1.9.0) (2026-07-20)
+
+
+### Features
+
+* implement multi-turn debate deliberation rounds and visualize stance evolution with persuasion tracking ([583cd96](https://github.com/blue1st/electron-magi-system/commit/583cd96cf05195de79822a31296a54c5becc9317))
+
 # [1.8.0](https://github.com/blue1st/electron-magi-system/compare/v1.7.0...v1.8.0) (2026-07-19)
 
 
