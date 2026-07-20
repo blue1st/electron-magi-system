@@ -272,6 +272,23 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ settings, onSave, 
                     </select>
                   </div>
                 )}
+
+                <div className="pt-3 border-t border-slate-800/80 flex items-center justify-between">
+                  <div>
+                    <label className="text-xs font-mono-nerv text-slate-200 font-bold block">
+                      ALLOW HUMAN INTERVENTION (人間介入要請のデフォルト許可)
+                    </label>
+                    <span className="text-[11px] text-slate-400">
+                      設問送信時にデフォルトで「人間介入を許可」を有効にします
+                    </span>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={formData.allowHumanInterventionDefault !== false}
+                    onChange={(e) => setFormData({ ...formData, allowHumanInterventionDefault: e.target.checked })}
+                    className="w-4 h-4 rounded border-slate-700 bg-black text-magi-orange focus:ring-magi-orange cursor-pointer"
+                  />
+                </div>
               </div>
 
               {/* Notifications & Sound Settings */}

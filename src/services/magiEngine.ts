@@ -27,7 +27,8 @@ export async function runPhase1Initial(
   callbacks: MagiEngineCallbacks,
   attachedDoc?: FetchedDocument,
   deliberationId: string = `SESSION-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-  parentConsensusSummary?: string
+  parentConsensusSummary?: string,
+  allowHumanIntervention: boolean = true
 ): Promise<Record<MagiId, MagiInitialOutput>> {
   const magiIds: MagiId[] = ['MELCHIOR', 'BALTHASAR', 'CASPAR'];
   const results: Partial<Record<MagiId, MagiInitialOutput>> = {};
@@ -89,7 +90,7 @@ export async function runPhase1Initial(
         rawResponse: rawRes
       };
 
-      if (parsed.requestedIntervention && parsed.requestedIntervention.question) {
+      if (allowHumanIntervention && parsed.requestedIntervention && parsed.requestedIntervention.question) {
         output.requestedIntervention = {
           id: `REQ-${Date.now()}-${id}`,
           turn: 0,
@@ -156,7 +157,8 @@ export async function runPhase2Debate(
   onRoundComplete?: (roundIndex: number, roundOutputs: Record<MagiId, MagiDeliberationOutput>, opinionShifts: OpinionShift[]) => void,
   userInterventions?: HumanInterventionResponse[],
   startTurn: number = 1,
-  existingRounds?: Array<Record<MagiId, MagiDeliberationOutput>>
+  existingRounds?: Array<Record<MagiId, MagiDeliberationOutput>>,
+  allowHumanIntervention: boolean = true
 ): Promise<Phase2DebateResult> {
   const magiIds: MagiId[] = ['MELCHIOR', 'BALTHASAR', 'CASPAR'];
   const maxTurns = settings.maxDebateTurns && settings.maxDebateTurns >= 1 ? settings.maxDebateTurns : 2;
@@ -311,7 +313,7 @@ ${initialSummary}${historySection}
           rawResponse: rawRes
         };
 
-        if (parsed.requestedIntervention && parsed.requestedIntervention.question) {
+        if (allowHumanIntervention && parsed.requestedIntervention && parsed.requestedIntervention.question) {
           const reqIntervention: HumanInterventionRequest = {
             id: `REQ-${Date.now()}-${id}`,
             turn,

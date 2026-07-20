@@ -24,6 +24,7 @@ export interface Settings {
   defaultModel: string;
   enableDeliberation: boolean; // false = Fast Mode (Single Phase), true = Deliberation Mode (3-Phase)
   maxDebateTurns?: number; // 熟議ターン数 (デフォルト: 2)
+  allowHumanInterventionDefault?: boolean; // デフォルトで人間介入を許可するか (デフォルト: true)
   enableNotifications?: boolean; // OS通知・Dock跳ね演出のON/OFF (デフォルト: true)
   soundEffects: boolean; // 効果音のON/OFF
   personalities: Record<MagiId, MagiPersonality>;

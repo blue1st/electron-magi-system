@@ -44,6 +44,7 @@ const INITIAL_SETTINGS: Settings = {
   defaultModel: 'gpt-4o',
   enableDeliberation: true,
   maxDebateTurns: 2,
+  allowHumanInterventionDefault: true,
   enableNotifications: true,
   soundEffects: true,
   personalities: DEFAULT_PERSONALITIES,
@@ -64,7 +65,8 @@ export const App: React.FC = () => {
         return {
           ...INITIAL_SETTINGS,
           ...parsed,
-          maxDebateTurns: parsed.maxDebateTurns || 2
+          maxDebateTurns: parsed.maxDebateTurns || 2,
+          allowHumanInterventionDefault: parsed.allowHumanInterventionDefault !== false
         };
       } catch (e) { }
     }
@@ -73,6 +75,13 @@ export const App: React.FC = () => {
 
   const [queryInput, setQueryInput] = useState('');
   const [urlInput, setUrlInput] = useState('');
+  const [allowInterventionInput, setAllowInterventionInput] = useState<boolean>(() => settings.allowHumanInterventionDefault !== false);
+  const [debateTurnsInput, setDebateTurnsInput] = useState<number>(() => settings.maxDebateTurns || 2);
+
+  useEffect(() => {
+    setAllowInterventionInput(settings.allowHumanInterventionDefault !== false);
+    setDebateTurnsInput(settings.maxDebateTurns || 2);
+  }, [settings.allowHumanInterventionDefault, settings.maxDebateTurns]);
   const [attachedDoc, setAttachedDoc] = useState<FetchedDocument | null>(null);
   const [isFetchingDoc, setIsFetchingDoc] = useState(false);
   const [showDocPreview, setShowDocPreview] = useState(false);
@@ -243,26 +252,35 @@ export const App: React.FC = () => {
       parentConsensusSummary: parentConsensusSummary,
     });
 
+    const customSettings: Settings = {
+      ...settings,
+      maxDebateTurns: debateTurnsInput,
+    };
+
     try {
       // PHASE 1: Initial Proposals
       const initial = await runPhase1Initial(
         query,
-        settings,
+        customSettings,
         {
           onLog: addLog,
           onMagiStatusChange: handleMagiStatusChange,
         },
         currentDoc || undefined,
         deliberationId,
-        parentConsensusSummary
+        parentConsensusSummary,
+        allowInterventionInput
       );
 
       setState((prev) => ({ ...prev, initialOutputs: initial }));
 
-      // Phase 1 で介入要求があるか判定
-      const initialIntervention = Object.values(initial).find((o) => o.requestedIntervention)?.requestedIntervention;
+      // Phase 1 で介入要求があるか判定 (allowInterventionInput が true の場合)
+      const initialIntervention = allowInterventionInput
+        ? Object.values(initial).find((o) => o.requestedIntervention)?.requestedIntervention
+        : undefined;
+
       if (initialIntervention) {
-        notifyHumanInterventionRequired(initialIntervention, settings);
+        notifyHumanInterventionRequired(initialIntervention, customSettings);
         setState((prev) => ({
           ...prev,
           step: 'AWAITING_INTERVENTION',
@@ -274,14 +292,15 @@ export const App: React.FC = () => {
       await continueDebateAndConsensus(
         query,
         initial,
-        settings,
+        customSettings,
         deliberationId,
         resolvedMode,
         currentDoc || undefined,
         parentConsensusSummary,
         [],
         1,
-        []
+        [],
+        allowInterventionInput
       );
 
     } catch (err: any) {
@@ -302,14 +321,15 @@ export const App: React.FC = () => {
   const continueDebateAndConsensus = async (
     query: string,
     initialOutputs: Record<MagiId, any>,
-    settings: Settings,
+    currentSettings: Settings,
     deliberationId: string,
     resolvedMode: any,
     attachedDoc: FetchedDocument | undefined,
     parentConsensusSummary: string | undefined,
     userInterventions: HumanInterventionResponse[] = [],
     startTurn: number = 1,
-    existingRounds: Array<Record<MagiId, any>> = []
+    existingRounds: Array<Record<MagiId, any>> = [],
+    allowIntervention: boolean = true
   ) => {
     let delibOutputs: Partial<Record<MagiId, any>> | undefined = undefined;
     let allRounds: Array<Record<MagiId, any>> = existingRounds;
@@ -317,13 +337,13 @@ export const App: React.FC = () => {
 
     try {
       // PHASE 2: Cross Debate (If Enabled)
-      if (settings.enableDeliberation) {
-        const maxTurns = settings.maxDebateTurns || 2;
+      if (currentSettings.enableDeliberation) {
+        const maxTurns = currentSettings.maxDebateTurns || 2;
         setState((prev) => ({ ...prev, step: 'PHASE_2_DEBATE', maxTurns, currentTurn: startTurn }));
         const debateResults = await runPhase2Debate(
           query,
           initialOutputs,
-          settings,
+          currentSettings,
           {
             onLog: addLog,
             onMagiStatusChange: handleMagiStatusChange,
@@ -341,7 +361,8 @@ export const App: React.FC = () => {
           },
           userInterventions,
           startTurn,
-          existingRounds
+          existingRounds,
+          allowIntervention
         );
         delibOutputs = debateResults.finalDeliberationOutputs;
         allRounds = debateResults.allRounds;
@@ -353,8 +374,8 @@ export const App: React.FC = () => {
           deliberationRounds: debateResults.allRounds
         }));
 
-        if (debateResults.detectedIntervention) {
-          notifyHumanInterventionRequired(debateResults.detectedIntervention, settings);
+        if (allowIntervention && debateResults.detectedIntervention) {
+          notifyHumanInterventionRequired(debateResults.detectedIntervention, currentSettings);
           setState((prev) => ({
             ...prev,
             step: 'AWAITING_INTERVENTION',
@@ -702,6 +723,34 @@ export const App: React.FC = () => {
                 {isFetchingDoc ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <LinkIcon className="w-3.5 h-3.5" />}
                 <span>FETCH DOC</span>
               </button>
+            </div>
+            <div className="flex flex-wrap items-center justify-between gap-3 bg-black/40 px-3.5 py-2 rounded-lg border border-slate-800/80 text-xs font-mono-nerv">
+              {/* Allow Human Intervention Checkbox */}
+              <label className="flex items-center space-x-2 text-slate-300 hover:text-white cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={allowInterventionInput}
+                  onChange={(e) => setAllowInterventionInput(e.target.checked)}
+                  disabled={isBusy}
+                  className="w-3.5 h-3.5 rounded border-slate-700 bg-black text-magi-orange focus:ring-magi-orange cursor-pointer"
+                />
+                <span className="font-bold tracking-wide">人間介入要請を許可 (ALLOW INTERVENTION)</span>
+              </label>
+
+              {/* Debate Turns Selector */}
+              <div className="flex items-center space-x-2 text-slate-400">
+                <span className="font-semibold text-slate-300">熟議ラウンド:</span>
+                <select
+                  value={debateTurnsInput}
+                  onChange={(e) => setDebateTurnsInput(parseInt(e.target.value, 10))}
+                  disabled={isBusy}
+                  className="bg-black/80 border border-slate-700 rounded px-2.5 py-1 text-xs font-mono-nerv text-magi-cyan font-bold focus:border-magi-cyan focus:outline-none"
+                >
+                  <option value={1}>1 Turn (高速熟議)</option>
+                  <option value={2}>2 Turns (標準熟議)</option>
+                  <option value={3}>3 Turns (深層討論)</option>
+                </select>
+              </div>
             </div>
 
             {/* Attached Document Preview Badge */}
