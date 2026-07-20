@@ -1,5 +1,5 @@
 import React from 'react';
-import { Settings as SettingsIcon, Cpu, RefreshCw, Zap, Layers, Activity, History } from 'lucide-react';
+import { Settings as SettingsIcon, Cpu, RefreshCw, Zap, Layers, Activity, History, Maximize2, Minimize2 } from 'lucide-react';
 import { Settings, DeliberationStep } from '../types';
 import pkg from '../../package.json';
 
@@ -10,6 +10,8 @@ interface MagiHeaderProps {
   onOpenHistory: () => void;
   onReset: () => void;
   onToggleDeliberationMode: () => void;
+  isFullScreen?: boolean;
+  onToggleFullScreen?: () => void;
 }
 
 export const MagiHeader: React.FC<MagiHeaderProps> = ({
@@ -19,12 +21,16 @@ export const MagiHeader: React.FC<MagiHeaderProps> = ({
   onOpenHistory,
   onReset,
   onToggleDeliberationMode,
+  isFullScreen = false,
+  onToggleFullScreen,
 }) => {
   const isBusy = step !== 'IDLE' && step !== 'COMPLETED' && step !== 'ERROR';
   const appVersion = pkg.version || '1.1.0';
 
   return (
-    <header className="h-16 border-b border-magi-orange/30 bg-magi-card/90 backdrop-blur-md pl-20 sm:pl-24 pr-6 flex items-center justify-between select-none shrink-0 z-30 app-drag-region">
+    <header className={`h-16 border-b border-magi-orange/30 bg-magi-card/90 backdrop-blur-md pr-6 flex items-center justify-between select-none shrink-0 z-30 app-drag-region transition-all ${
+      isFullScreen ? 'pl-6 sm:pl-8' : 'pl-20 sm:pl-24'
+    }`}>
       {/* Brand / Logo */}
       <div className="flex items-center space-x-3 app-no-drag">
         <div className="relative flex items-center justify-center w-9 h-9 rounded border border-magi-orange bg-magi-orange/10 text-magi-orange font-bold font-mono-nerv text-xl glow-orange shrink-0">
@@ -126,6 +132,20 @@ export const MagiHeader: React.FC<MagiHeaderProps> = ({
 
       {/* Actions */}
       <div className="flex items-center space-x-2.5 app-no-drag">
+        {window.electronAPI && onToggleFullScreen && (
+          <button
+            onClick={onToggleFullScreen}
+            className="p-2 rounded border border-slate-800 text-slate-400 hover:text-magi-orange hover:border-magi-orange/50 hover:bg-black/50 transition-all"
+            title={isFullScreen ? "全画面モード解除" : "全画面モード表示"}
+          >
+            {isFullScreen ? (
+              <Minimize2 className="w-4 h-4" />
+            ) : (
+              <Maximize2 className="w-4 h-4" />
+            )}
+          </button>
+        )}
+
         <button
           onClick={onOpenHistory}
           className="flex items-center space-x-1.5 text-xs font-mono-nerv px-3 py-2 rounded bg-black/50 text-slate-300 border border-slate-800 hover:border-magi-orange/50 hover:text-magi-orange hover:bg-black/80 transition-all"

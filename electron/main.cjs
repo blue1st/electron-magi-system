@@ -41,6 +41,14 @@ function createWindow() {
       }
     } catch (e) {}
   });
+
+  mainWindow.on('enter-full-screen', () => {
+    mainWindow.webContents.send('fullscreen-change', true);
+  });
+
+  mainWindow.on('leave-full-screen', () => {
+    mainWindow.webContents.send('fullscreen-change', false);
+  });
 }
 
 // Dynamic Dock Icon IPC Listener
@@ -80,6 +88,31 @@ ipcMain.on('set-badge', (event, { text }) => {
   } catch (err) {
     console.error('Failed to set dock badge:', err);
   }
+});
+
+// Full Screen IPC Listeners
+ipcMain.handle('toggle-fullscreen', (event) => {
+  try {
+    const win = BrowserWindow.fromWebContents(event.sender);
+    if (win) {
+      const isFS = win.isFullScreen();
+      win.setFullScreen(!isFS);
+      return !isFS;
+    }
+  } catch (err) {
+    console.error('Failed to toggle full screen:', err);
+  }
+  return false;
+});
+
+ipcMain.handle('is-fullscreen', (event) => {
+  try {
+    const win = BrowserWindow.fromWebContents(event.sender);
+    return win ? win.isFullScreen() : false;
+  } catch (err) {
+    console.error('Failed to check full screen:', err);
+  }
+  return false;
 });
 
 app.whenReady().then(() => {

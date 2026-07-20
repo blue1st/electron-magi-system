@@ -107,6 +107,7 @@ export const App: React.FC = () => {
   const [logs, setLogs] = useState<ProtocolLog[]>([]);
   const consensusRef = useRef<HTMLDivElement>(null);
   const queryInputRef = useRef<HTMLInputElement>(null);
+  const [isFullScreen, setIsFullScreen] = useState(false);
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY_SETTINGS, JSON.stringify(settings));
@@ -121,6 +122,25 @@ export const App: React.FC = () => {
       consensusRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
   }, [state.consensus]);
+
+  useEffect(() => {
+    if (window.electronAPI) {
+      if (typeof window.electronAPI.isFullScreen === 'function') {
+        window.electronAPI.isFullScreen().then(setIsFullScreen);
+      }
+      if (typeof window.electronAPI.onFullScreenChange === 'function') {
+        const unsubscribe = window.electronAPI.onFullScreenChange(setIsFullScreen);
+        return () => unsubscribe();
+      }
+    }
+  }, []);
+
+  const handleToggleFullScreen = async () => {
+    if (window.electronAPI && typeof window.electronAPI.toggleFullScreen === 'function') {
+      const fs = await window.electronAPI.toggleFullScreen();
+      setIsFullScreen(fs);
+    }
+  };
 
   const addLog = (log: Omit<ProtocolLog, 'id' | 'timestamp'>) => {
     const newLog: ProtocolLog = {
@@ -613,6 +633,8 @@ export const App: React.FC = () => {
         onToggleDeliberationMode={() =>
           setSettings((prev) => ({ ...prev, enableDeliberation: !prev.enableDeliberation }))
         }
+        isFullScreen={isFullScreen}
+        onToggleFullScreen={handleToggleFullScreen}
       />
 
       {/* Progress Step Bar (Fixed below header) */}

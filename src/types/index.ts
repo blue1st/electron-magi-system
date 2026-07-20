@@ -159,6 +159,9 @@ declare global {
       updateDockIcon: (dataUrl: string, step: DeliberationStep) => void;
       bounceDock?: (type: 'critical' | 'informational') => void;
       setBadge?: (text: string) => void;
+      toggleFullScreen?: () => Promise<boolean>;
+      isFullScreen?: () => Promise<boolean>;
+      onFullScreenChange?: (callback: (isFullScreen: boolean) => void) => () => void;
     };
   }
 }
