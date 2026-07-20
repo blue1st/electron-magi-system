@@ -1,6 +1,6 @@
 import React from 'react';
 import { Settings, MagiId, DeliberationState, DecisionVote } from '../types';
-import { Cpu, CheckCircle2, AlertTriangle, ShieldAlert, Sparkles, MessageSquare } from 'lucide-react';
+import { Cpu, CheckCircle2, AlertTriangle, ShieldAlert, Sparkles, MessageSquare, RefreshCw, ArrowRight } from 'lucide-react';
 
 interface MagiTriadViewProps {
   settings: Settings;
@@ -46,12 +46,51 @@ export const MagiTriadView: React.FC<MagiTriadViewProps> = ({ settings, state })
         const status = state.activeMagiStatus[id];
         const initOutput = state.initialOutputs[id];
         const delibOutput = state.deliberationOutputs[id];
+        const rounds = state.deliberationRounds || [];
 
         const isThinking = status === 'THINKING';
         const isDone = status === 'DONE';
-        const isError = status === 'ERROR';
 
         const currentVote = delibOutput?.revisedVote || initOutput?.initialVote;
+
+        // 立場変節の判定 (初案から判定や主張が変わったか)
+        const initialVote = initOutput?.initialVote;
+        const initialStance = initOutput?.stanceLabel;
+        const finalVote = delibOutput?.revisedVote;
+        const finalStance = delibOutput?.revisedStanceLabel;
+
+        const hasShifted = Boolean(
+          delibOutput &&
+          (initialVote !== finalVote || (initialStance && finalStance && initialStance !== finalStance))
+        );
+
+        // 立場推移履歴の作成
+        const stanceHistory: Array<{ label: string; vote: DecisionVote; stepName: string }> = [];
+        if (initOutput) {
+          stanceHistory.push({
+            stepName: '初案',
+            vote: initOutput.initialVote,
+            label: initOutput.stanceLabel || initOutput.initialVote
+          });
+        }
+        if (rounds.length > 0) {
+          rounds.forEach((round, rIdx) => {
+            const rOutput = round[id];
+            if (rOutput) {
+              stanceHistory.push({
+                stepName: `T${rIdx + 1}`,
+                vote: rOutput.revisedVote,
+                label: rOutput.revisedStanceLabel || rOutput.revisedVote
+              });
+            }
+          });
+        } else if (delibOutput) {
+          stanceHistory.push({
+            stepName: '熟議',
+            vote: delibOutput.revisedVote,
+            label: delibOutput.revisedStanceLabel || delibOutput.revisedVote
+          });
+        }
 
         return (
           <div
@@ -59,6 +98,8 @@ export const MagiTriadView: React.FC<MagiTriadViewProps> = ({ settings, state })
             className={`relative flex flex-col rounded-lg border bg-magi-card/90 transition-all duration-300 overflow-hidden ${
               isThinking
                 ? 'border-magi-orange shadow-lg glow-orange animate-magi-pulse'
+                : hasShifted
+                ? 'border-magi-cyan/70 shadow-lg glow-cyan'
                 : isDone
                 ? 'border-slate-700 hover:border-magi-orange/50'
                 : 'border-slate-800 opacity-80'
@@ -78,9 +119,17 @@ export const MagiTriadView: React.FC<MagiTriadViewProps> = ({ settings, state })
                   {personality.name}
                 </h3>
               </div>
-              <span className="text-[10px] font-mono-nerv px-1.5 py-0.5 rounded bg-black/50 text-slate-300 border border-slate-700">
-                {personality.role}
-              </span>
+              <div className="flex items-center space-x-2">
+                {hasShifted && (
+                  <span className="text-[10px] font-mono-nerv font-bold px-2 py-0.5 rounded bg-magi-cyan/20 border border-magi-cyan text-magi-cyan flex items-center space-x-1 animate-pulse">
+                    <RefreshCw className="w-3 h-3 animate-spin" />
+                    <span>変節 (SHIFTED)</span>
+                  </span>
+                )}
+                <span className="text-[10px] font-mono-nerv px-1.5 py-0.5 rounded bg-black/50 text-slate-300 border border-slate-700">
+                  {personality.role}
+                </span>
+              </div>
             </div>
 
             {/* Status & Decision Banner */}
@@ -98,6 +147,28 @@ export const MagiTriadView: React.FC<MagiTriadViewProps> = ({ settings, state })
                 )}
               </div>
 
+              {/* 立場推移ステッパー (Stance Tracker) */}
+              {stanceHistory.length > 1 && (
+                <div className="mb-4 p-2.5 rounded bg-black/60 border border-slate-800 flex items-center space-x-1.5 overflow-x-auto text-[11px] font-mono-nerv">
+                  <span className="text-slate-400 font-semibold shrink-0">推移:</span>
+                  {stanceHistory.map((step, idx) => (
+                    <React.Fragment key={idx}>
+                      {idx > 0 && <ArrowRight className="w-3 h-3 text-slate-600 shrink-0" />}
+                      <div className={`px-1.5 py-0.5 rounded text-[10px] whitespace-nowrap border ${
+                        step.vote === 'APPROVAL'
+                          ? 'bg-magi-green/10 border-magi-green/40 text-magi-green'
+                          : step.vote === 'DENIED'
+                          ? 'bg-magi-red/10 border-magi-red/40 text-magi-red'
+                          : 'bg-magi-yellow/10 border-magi-yellow/40 text-magi-yellow'
+                      }`}>
+                        <span className="text-slate-400 mr-1">{step.stepName}:</span>
+                        <span className="font-bold">{step.label}</span>
+                      </div>
+                    </React.Fragment>
+                  ))}
+                </div>
+              )}
+
               {/* Content Body */}
               {initOutput ? (
                 <div className="space-y-4 text-xs">
@@ -105,7 +176,7 @@ export const MagiTriadView: React.FC<MagiTriadViewProps> = ({ settings, state })
                   <div className="bg-black/40 p-3 rounded border border-slate-800/80">
                     <div className="flex items-center space-x-1 text-[11px] font-mono-nerv text-magi-orange mb-1 font-semibold">
                       <Sparkles className="w-3 h-3" />
-                      <span>1st Phase: 独立理由</span>
+                      <span>1st Phase: 独立初案</span>
                     </div>
                     <p className="text-slate-300 leading-relaxed font-sans whitespace-pre-wrap">
                       {initOutput.reasoning}
@@ -117,16 +188,29 @@ export const MagiTriadView: React.FC<MagiTriadViewProps> = ({ settings, state })
                     )}
                   </div>
 
-                  {/* Phase 2 Debate Refinement if present */}
+                  {/* Phase 2 Debate Refinements */}
                   {delibOutput && (
-                    <div className="bg-black/60 p-3 rounded border border-slate-700/80">
-                      <div className="flex items-center space-x-1 text-[11px] font-mono-nerv text-magi-cyan mb-1 font-semibold">
-                        <MessageSquare className="w-3 h-3" />
-                        <span>2nd Phase: 熟議・反論コメント</span>
+                    <div className="bg-black/60 p-3 rounded border border-slate-700/80 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center space-x-1 text-[11px] font-mono-nerv text-magi-cyan font-semibold">
+                          <MessageSquare className="w-3 h-3" />
+                          <span>2nd Phase: 熟議・反論 {delibOutput.roundIndex ? `[Turn ${delibOutput.roundIndex}]` : ''}</span>
+                        </div>
                       </div>
                       <p className="text-slate-300 leading-relaxed font-sans whitespace-pre-wrap">
                         {delibOutput.refinements}
                       </p>
+
+                      {/* 変節理由ハイライト */}
+                      {delibOutput.shiftReason && (
+                        <div className="mt-2 p-2 rounded bg-magi-cyan/10 border border-magi-cyan/40 text-magi-cyan text-[11px]">
+                          <span className="font-bold flex items-center space-x-1 mb-0.5">
+                            <RefreshCw className="w-3 h-3" />
+                            <span>見解の変節理由:</span>
+                          </span>
+                          <p className="text-slate-200 leading-relaxed">{delibOutput.shiftReason}</p>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>

@@ -23,6 +23,7 @@ export interface Settings {
   apiKey: string;
   defaultModel: string;
   enableDeliberation: boolean; // false = Fast Mode (Single Phase), true = Deliberation Mode (3-Phase)
+  maxDebateTurns?: number; // 熟議ターン数 (デフォルト: 2)
   soundEffects: boolean;
   personalities: Record<MagiId, MagiPersonality>;
 }
@@ -38,21 +39,26 @@ export interface MagiInitialOutput {
 
 export interface MagiDeliberationOutput {
   magiId: MagiId;
+  roundIndex?: number; // 何ラウンド目の熟議か (1-indexed)
   refinements: string; // Comments on other MAGIs' points
   revisedVote: DecisionVote;
   revisedStanceLabel?: string;
   finalArgument: string;
+  shiftReason?: string; // 前ターンからの立場変更の理由（もし変更があれば）
+  influencedBy?: MagiId[]; // 説得に寄与した他のMAGI
   rawResponse: string;
 }
 
 export interface OpinionShift {
   magiId: MagiId;
+  turn?: number; // どのターンで発生したか
   fromVote: DecisionVote;
   toVote: DecisionVote;
   fromStanceLabel?: string;
   toStanceLabel?: string;
   hasShifted: boolean;
   reasonForShift: string;
+  influencedBy?: MagiId[];
 }
 
 export interface PersuasionLink {
@@ -91,6 +97,9 @@ export interface DeliberationState {
   activeMagiStatus: Record<MagiId, 'IDLE' | 'THINKING' | 'DONE' | 'ERROR'>;
   initialOutputs: Partial<Record<MagiId, MagiInitialOutput>>;
   deliberationOutputs: Partial<Record<MagiId, MagiDeliberationOutput>>;
+  deliberationRounds?: Array<Record<MagiId, MagiDeliberationOutput>>; // ラウンドごとの熟議結果
+  currentTurn?: number;
+  maxTurns?: number;
   consensus?: ConsensusResult;
   error?: string;
   parentSessionId?: string;
@@ -105,6 +114,7 @@ export interface DeliberationSession {
   attachedDoc?: FetchedDocument;
   initialOutputs: Partial<Record<MagiId, MagiInitialOutput>>;
   deliberationOutputs: Partial<Record<MagiId, MagiDeliberationOutput>>;
+  deliberationRounds?: Array<Record<MagiId, MagiDeliberationOutput>>;
   consensus: ConsensusResult;
   logs: ProtocolLog[];
   parentSessionId?: string;

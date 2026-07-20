@@ -5,7 +5,8 @@ import {
   DeliberationMode,
   ProtocolLog,
   MagiId,
-  DeliberationSession
+  DeliberationSession,
+  OpinionShift
 } from './types';
 import { DEFAULT_PERSONALITIES, detectDeliberationMode } from './config/defaultPrompts';
 import { runPhase1Initial, runPhase2Debate, runPhase3Consensus } from './services/magiEngine';
@@ -37,6 +38,7 @@ const INITIAL_SETTINGS: Settings = {
   apiKey: '',
   defaultModel: 'gpt-4o',
   enableDeliberation: true,
+  maxDebateTurns: 2,
   soundEffects: true,
   personalities: DEFAULT_PERSONALITIES,
 };
@@ -51,7 +53,14 @@ export const App: React.FC = () => {
   const [settings, setSettings] = useState<Settings>(() => {
     const saved = localStorage.getItem(STORAGE_KEY_SETTINGS);
     if (saved) {
-      try { return JSON.parse(saved); } catch (e) { }
+      try {
+        const parsed = JSON.parse(saved);
+        return {
+          ...INITIAL_SETTINGS,
+          ...parsed,
+          maxDebateTurns: parsed.maxDebateTurns || 2
+        };
+      } catch (e) { }
     }
     return INITIAL_SETTINGS;
   });
@@ -239,10 +248,13 @@ export const App: React.FC = () => {
       setState((prev) => ({ ...prev, initialOutputs: initial }));
 
       let delibOutputs: Partial<Record<MagiId, any>> | undefined = undefined;
+      let allRounds: Array<Record<MagiId, any>> | undefined = undefined;
+      let opinionShifts: OpinionShift[] = [];
 
       // PHASE 2: Cross Debate (If Enabled)
       if (settings.enableDeliberation) {
-        setState((prev) => ({ ...prev, step: 'PHASE_2_DEBATE' }));
+        const maxTurns = settings.maxDebateTurns || 2;
+        setState((prev) => ({ ...prev, step: 'PHASE_2_DEBATE', maxTurns, currentTurn: 1 }));
         const debateResults = await runPhase2Debate(
           query,
           initial,
@@ -253,10 +265,25 @@ export const App: React.FC = () => {
           },
           currentDoc || undefined,
           deliberationId,
-          parentConsensusSummary
+          parentConsensusSummary,
+          (roundIndex, roundOutputs, currentShifts) => {
+            setState((prev) => ({
+              ...prev,
+              currentTurn: roundIndex,
+              deliberationOutputs: roundOutputs,
+              deliberationRounds: [...(prev.deliberationRounds || []), roundOutputs]
+            }));
+          }
         );
-        delibOutputs = debateResults;
-        setState((prev) => ({ ...prev, deliberationOutputs: debateResults }));
+        delibOutputs = debateResults.finalDeliberationOutputs;
+        allRounds = debateResults.allRounds;
+        opinionShifts = debateResults.opinionShifts;
+
+        setState((prev) => ({
+          ...prev,
+          deliberationOutputs: debateResults.finalDeliberationOutputs,
+          deliberationRounds: debateResults.allRounds
+        }));
       }
 
       // PHASE 3: Synthesis & Vote
@@ -272,7 +299,9 @@ export const App: React.FC = () => {
         },
         deliberationId,
         resolvedMode,
-        parentConsensusSummary
+        parentConsensusSummary,
+        allRounds,
+        opinionShifts
       );
 
       setState((prev) => ({

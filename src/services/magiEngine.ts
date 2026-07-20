@@ -6,7 +6,8 @@ import {
   ConsensusResult,
   ProtocolLog,
   DecisionVote,
-  DeliberationMode
+  DeliberationMode,
+  OpinionShift
 } from '../types';
 import { FetchedDocument } from './docFetcher';
 import { buildFullSystemPrompt, SYSTEM_CONSENSUS_PROMPT } from '../config/defaultPrompts';
@@ -110,7 +111,13 @@ export async function runPhase1Initial(
   return results as Record<MagiId, MagiInitialOutput>;
 }
 
-// Phase 2: 相互熟議 (Cross Examination)
+// Phase 2: 相互熟議 (Cross Examination / Multi-Turn Debate)
+export interface Phase2DebateResult {
+  finalDeliberationOutputs: Record<MagiId, MagiDeliberationOutput>;
+  allRounds: Array<Record<MagiId, MagiDeliberationOutput>>;
+  opinionShifts: OpinionShift[];
+}
+
 export async function runPhase2Debate(
   query: string,
   initialOutputs: Record<MagiId, MagiInitialOutput>,
@@ -118,12 +125,20 @@ export async function runPhase2Debate(
   callbacks: MagiEngineCallbacks,
   attachedDoc?: FetchedDocument,
   deliberationId: string = `SESSION-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-  parentConsensusSummary?: string
-): Promise<Record<MagiId, MagiDeliberationOutput>> {
+  parentConsensusSummary?: string,
+  onRoundComplete?: (roundIndex: number, roundOutputs: Record<MagiId, MagiDeliberationOutput>, opinionShifts: OpinionShift[]) => void
+): Promise<Phase2DebateResult> {
   const magiIds: MagiId[] = ['MELCHIOR', 'BALTHASAR', 'CASPAR'];
-  const results: Partial<Record<MagiId, MagiDeliberationOutput>> = {};
+  const maxTurns = settings.maxDebateTurns && settings.maxDebateTurns >= 1 ? settings.maxDebateTurns : 2;
 
-  magiIds.forEach(id => callbacks.onMagiStatusChange(id, 'THINKING'));
+  const allRounds: Array<Record<MagiId, MagiDeliberationOutput>> = [];
+  const opinionShifts: OpinionShift[] = [];
+
+  let previousStances: Record<MagiId, { vote: DecisionVote; stanceLabel: string }> = {
+    MELCHIOR: { vote: initialOutputs.MELCHIOR.initialVote, stanceLabel: initialOutputs.MELCHIOR.stanceLabel || initialOutputs.MELCHIOR.initialVote },
+    BALTHASAR: { vote: initialOutputs.BALTHASAR.initialVote, stanceLabel: initialOutputs.BALTHASAR.stanceLabel || initialOutputs.BALTHASAR.initialVote },
+    CASPAR: { vote: initialOutputs.CASPAR.initialVote, stanceLabel: initialOutputs.CASPAR.stanceLabel || initialOutputs.CASPAR.initialVote },
+  };
 
   const docContext = attachedDoc
     ? `\n\n【参照外部ドキュメント / 参考資料】\nタイトル: ${attachedDoc.title}\nURL: ${attachedDoc.url}\n本文抜粋:\n${attachedDoc.content}\n`
@@ -133,97 +148,184 @@ export async function runPhase2Debate(
     ? `\n\n【前提知識 / 直前の合議結果 (継続審議コンテキスト)】\n${parentConsensusSummary}\n`
     : '';
 
-  const initialSummary = magiIds.map(id => {
-    const p = settings.personalities[id];
-    const out = initialOutputs[id];
-    return `■ ${p.name} (${p.role}):
+  for (let turn = 1; turn <= maxTurns; turn++) {
+    magiIds.forEach(id => callbacks.onMagiStatusChange(id, 'THINKING'));
+
+    const debateHistoryText = allRounds.map((round, rIdx) => {
+      const roundNum = rIdx + 1;
+      return `=== 熟議ラウンド ${roundNum} ===\n` + magiIds.map(id => {
+        const p = settings.personalities[id];
+        const out = round[id];
+        return `■ ${p.name}: 立場 [${out.revisedStanceLabel || out.revisedVote} (${out.revisedVote})]
+【反論・補足】: ${out.refinements}
+【根拠】: ${out.finalArgument}${out.shiftReason ? `\n【変節理由】: ${out.shiftReason}` : ''}`;
+      }).join('\n');
+    }).join('\n\n');
+
+    const initialSummary = magiIds.map(id => {
+      const p = settings.personalities[id];
+      const out = initialOutputs[id];
+      return `■ ${p.name} (${p.role}):
 【初案主張】: ${out.stanceLabel || out.initialVote} (${out.initialVote})
 【分析根拠】: ${out.reasoning}
 ${out.conditions ? `【提示条件】: ${out.conditions}` : ''}`;
-  }).join('\n\n');
+    }).join('\n\n');
 
-  const promises = magiIds.map(async (id) => {
-    const personality = settings.personalities[id];
-    const unitSessionId = `${deliberationId}-${id}-P2`;
+    const currentRoundOutputs: Partial<Record<MagiId, MagiDeliberationOutput>> = {};
 
-    callbacks.onLog({
-      source: id,
-      phase: 'CODE: 407 - CROSS DELIBERATION',
-      text: `${personality.name} 他2基の初案に対する熟議・反論プロトコル開始 (SESSION: ${unitSessionId})...`,
-      type: 'info'
-    });
+    const promises = magiIds.map(async (id) => {
+      const personality = settings.personalities[id];
+      const unitSessionId = `${deliberationId}-${id}-P2-T${turn}`;
 
-    const fullSystemPrompt = buildFullSystemPrompt(personality);
-    const sessionIsolationDirective = parentConsensusSummary
-      ? `\n\n【継続審議プロトコル指示 / UNIT_SESSION_ID: ${unitSessionId}】\n- 本熟議は【${personality.name}】による継続審議プロセスです。\n- 提示された【前提知識 / 直前の合議結果】を踏まえて議論してください。`
-      : `\n\n【セッション隔離指示 / UNIT_SESSION_ID: ${unitSessionId}】\n- 本熟議は【${personality.name}】専用の独立プロセス (SESSION: ${unitSessionId}) 内で行われます。\n- 過去のセッションの記憶や他議題のコンテキストは遮断されています。\n- 提示された【議題】および他MAGIユニットの初案データのみに基づいて議論してください。`;
+      callbacks.onLog({
+        source: id,
+        phase: `CODE: 407 - DELIBERATION ROUND ${turn}/${maxTurns}`,
+        text: `${personality.name} 第${turn}ターン熟議プロトコル開始 (SESSION: ${unitSessionId})...`,
+        type: 'info'
+      });
 
-    const debatePrompt = `【議題】
+      const fullSystemPrompt = buildFullSystemPrompt(personality);
+      const sessionIsolationDirective = parentConsensusSummary
+        ? `\n\n【継続審議プロトコル指示 / UNIT_SESSION_ID: ${unitSessionId}】\n- 本熟議は【${personality.name}】による継続審議（第${turn}/${maxTurns}ターン）です。\n- 過去のターンでの各ユニットの意見の推移を踏まえてさらに深い議論を行ってください。`
+        : `\n\n【セッション隔離指示 / UNIT_SESSION_ID: ${unitSessionId}】\n- 本熟議は【${personality.name}】専用の第${turn}/${maxTurns}ターン独立熟議プロセスです。`;
+
+      const historySection = debateHistoryText
+        ? `\n\n【これまでの熟議履歴 (前ターンまでの議論)】\n${debateHistoryText}`
+        : '';
+
+      const debatePrompt = `【議題】
 ${query}${parentContext}${docContext}
 
 【全MAGIユニットの第1次分析結果】
-${initialSummary}
+${initialSummary}${historySection}
 
 【あなた (${personality.name} / ${personality.role}) への指令】
-議題・前提知識・参照ドキュメント・他の2つのMAGIの意見を吟味した上で、あなたの視点から以下の点について熟議・反論・補足を行ってください：
-1. 他のMAGIの意見で妥当な点、あるいは過度・見落としている危険な点
-2. 相互議論を経た上での、あなたの【最終修正判定 (revisedVote)】および【修正主張ショートラベル (revisedStanceLabel)】
-3. 最終的な判断理由
+第${turn}/${maxTurns}ターンの熟議を行います。
+議題、他MAGIの初案およびこれまでの熟議の変節プロセスを精査し、あなたの視点から以下について深く考察・反論・または意見の修正を行ってください：
+1. 他のMAGIの指摘で納得・妥当と思える点、あるいは納得できず対立する点
+2. 相互議論を経た現時点での【修正判定 (revisedVote)】および【修正主張ショートラベル (revisedStanceLabel)】
+3. 前ターン（または初案）から立場や条件に変更があった場合、その理由 (shiftReason) と、特にどのMAGIの意見に影響を受けたか (influencedBy)
+4. 最終的な判断理由
 
 以下のJSON形式で回答してください：
 {
   "revisedVote": "APPROVAL" | "DENIED" | "CONDITIONAL",
-  "revisedStanceLabel": "あなたの立場・選択・主張のショートラベル (15文字以内)",
+  "revisedStanceLabel": "あなたの立場・主張のショートラベル (15文字以内)",
   "refinements": "他のMAGIへの同意・反論・懸念・補足コメント",
-  "finalArgument": "最終的な主張と判断根拠"
+  "finalArgument": "最終的な主張と判断根拠",
+  "shiftReason": "前ターンから立場を変更・妥協・修正した場合はその理由（変更がない場合は空文字）",
+  "influencedBy": ["MELCHIOR", "BALTHASAR", "CASPAR のうち影響を受けたユニット（なければ空配列）"]
 }`;
 
-    const messages = [
-      { role: 'system' as const, content: `${fullSystemPrompt}${sessionIsolationDirective}` },
-      { role: 'user' as const, content: debatePrompt }
-    ];
+      const messages = [
+        { role: 'system' as const, content: `${fullSystemPrompt}${sessionIsolationDirective}` },
+        { role: 'user' as const, content: debatePrompt }
+      ];
 
-    try {
-      const rawRes = await sendChatCompletion(settings, messages, personality.modelOverride);
-      const parsed = extractJsonFromResponse<{ revisedVote?: DecisionVote; revisedStanceLabel?: string; refinements?: string; finalArgument?: string }>(rawRes, {
-        revisedVote: initialOutputs[id].initialVote,
-        revisedStanceLabel: initialOutputs[id].stanceLabel,
-        refinements: rawRes,
-        finalArgument: rawRes
-      });
+      try {
+        const rawRes = await sendChatCompletion(settings, messages, personality.modelOverride);
+        const parsed = extractJsonFromResponse<{
+          revisedVote?: DecisionVote;
+          revisedStanceLabel?: string;
+          refinements?: string;
+          finalArgument?: string;
+          shiftReason?: string;
+          influencedBy?: MagiId[];
+        }>(rawRes, {
+          revisedVote: previousStances[id].vote,
+          revisedStanceLabel: previousStances[id].stanceLabel,
+          refinements: rawRes,
+          finalArgument: rawRes,
+          shiftReason: '',
+          influencedBy: []
+        });
 
-      const vote: DecisionVote = parsed.revisedVote || initialOutputs[id].initialVote;
-      const output: MagiDeliberationOutput = {
-        magiId: id,
-        refinements: parsed.refinements || rawRes,
-        revisedVote: vote,
-        revisedStanceLabel: parsed.revisedStanceLabel || initialOutputs[id].stanceLabel || (vote === 'APPROVAL' ? '可決' : vote === 'DENIED' ? '否決' : '条件付可決'),
-        finalArgument: parsed.finalArgument || rawRes,
-        rawResponse: rawRes
+        const vote: DecisionVote = parsed.revisedVote || previousStances[id].vote;
+        const stanceLabel = parsed.revisedStanceLabel || previousStances[id].stanceLabel || (vote === 'APPROVAL' ? '可決' : vote === 'DENIED' ? '否決' : '条件付可決');
+
+        const output: MagiDeliberationOutput = {
+          magiId: id,
+          roundIndex: turn,
+          refinements: parsed.refinements || rawRes,
+          revisedVote: vote,
+          revisedStanceLabel: stanceLabel,
+          finalArgument: parsed.finalArgument || rawRes,
+          shiftReason: parsed.shiftReason,
+          influencedBy: parsed.influencedBy,
+          rawResponse: rawRes
+        };
+
+        currentRoundOutputs[id] = output;
+        callbacks.onMagiStatusChange(id, 'DONE');
+
+        const prev = previousStances[id];
+        const hasShifted = prev.vote !== vote || prev.stanceLabel !== stanceLabel;
+
+        if (hasShifted) {
+          const shiftInfo: OpinionShift = {
+            magiId: id,
+            turn,
+            fromVote: prev.vote,
+            toVote: vote,
+            fromStanceLabel: prev.stanceLabel,
+            toStanceLabel: stanceLabel,
+            hasShifted: true,
+            reasonForShift: parsed.shiftReason || parsed.refinements || '議論を通じて立ち位置を修正',
+            influencedBy: parsed.influencedBy
+          };
+          opinionShifts.push(shiftInfo);
+
+          callbacks.onLog({
+            source: id,
+            phase: `CODE: 407 - OPINION SHIFT (TURN ${turn})`,
+            text: `【見解変節】${personality.name} が主張を変更 [${prev.stanceLabel}] ➔ [${stanceLabel} (${vote})]\n理由: ${shiftInfo.reasonForShift}`,
+            type: 'vote'
+          });
+        } else {
+          callbacks.onLog({
+            source: id,
+            phase: `CODE: 407 - TURN ${turn} COMPLETE`,
+            text: `【主張維持: ${stanceLabel} (${vote})】\n${output.refinements}`,
+            type: vote === 'APPROVAL' ? 'success' : vote === 'DENIED' ? 'warn' : 'info'
+          });
+        }
+      } catch (err: any) {
+        callbacks.onMagiStatusChange(id, 'ERROR');
+        currentRoundOutputs[id] = {
+          magiId: id,
+          roundIndex: turn,
+          refinements: `熟議エラー: ${err.message}`,
+          revisedVote: previousStances[id].vote,
+          revisedStanceLabel: previousStances[id].stanceLabel,
+          finalArgument: initialOutputs[id].reasoning,
+          rawResponse: ''
+        };
+      }
+    });
+
+    await Promise.all(promises);
+
+    const completeRoundOutputs = currentRoundOutputs as Record<MagiId, MagiDeliberationOutput>;
+    allRounds.push(completeRoundOutputs);
+
+    magiIds.forEach(id => {
+      previousStances[id] = {
+        vote: completeRoundOutputs[id].revisedVote,
+        stanceLabel: completeRoundOutputs[id].revisedStanceLabel || completeRoundOutputs[id].revisedVote
       };
+    });
 
-      results[id] = output;
-      callbacks.onMagiStatusChange(id, 'DONE');
-      callbacks.onLog({
-        source: id,
-        phase: 'CODE: 407 - DELIBERATION COMPLETE',
-        text: `【熟議後主張: ${output.revisedStanceLabel} (${vote})】\n${output.refinements}\n\n【最終主張】:\n${output.finalArgument}`,
-        type: vote === 'APPROVAL' ? 'success' : vote === 'DENIED' ? 'warn' : 'info'
-      });
-    } catch (err: any) {
-      callbacks.onMagiStatusChange(id, 'ERROR');
-      results[id] = {
-        magiId: id,
-        refinements: `熟議エラー: ${err.message}`,
-        revisedVote: initialOutputs[id].initialVote,
-        finalArgument: initialOutputs[id].reasoning,
-        rawResponse: ''
-      };
+    if (onRoundComplete) {
+      onRoundComplete(turn, completeRoundOutputs, opinionShifts);
     }
-  });
+  }
 
-  await Promise.all(promises);
-  return results as Record<MagiId, MagiDeliberationOutput>;
+  const finalDeliberationOutputs = allRounds[allRounds.length - 1];
+  return {
+    finalDeliberationOutputs,
+    allRounds,
+    opinionShifts
+  };
 }
 
 // Phase 3: 最終集計と合意統合
@@ -235,7 +337,9 @@ export async function runPhase3Consensus(
   callbacks: MagiEngineCallbacks,
   deliberationId: string = `SESSION-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
   activeMode: DeliberationMode = 'AUTO',
-  parentConsensusSummary?: string
+  parentConsensusSummary?: string,
+  allRounds?: Array<Record<MagiId, MagiDeliberationOutput>>,
+  extractedOpinionShifts?: OpinionShift[]
 ): Promise<ConsensusResult> {
   const coreSessionId = `${deliberationId}-CORE-P3`;
 
@@ -265,8 +369,14 @@ export async function runPhase3Consensus(
     return `### ${p.name} (${p.role})
 - 初案主張: ${init.stanceLabel || init.initialVote} (${init.initialVote})
 - 初案根拠: ${init.reasoning}
-${delib ? `- 熟議後主張: ${delib.revisedStanceLabel || delib.revisedVote} (${delib.revisedVote})\n- 熟議論点: ${delib.refinements}\n- 最終主張: ${delib.finalArgument}` : ''}`;
+${delib ? `- 最終熟議後主張: ${delib.revisedStanceLabel || delib.revisedVote} (${delib.revisedVote})\n- 熟議論点: ${delib.refinements}\n- 最終主張: ${delib.finalArgument}${delib.shiftReason ? `\n- 変節理由: ${delib.shiftReason}` : ''}` : ''}`;
   }).join('\n\n');
+
+  const turnsSummaryText = allRounds && allRounds.length > 0
+    ? `\n\n【全熟議ターン数: ${allRounds.length}】\n` + allRounds.map((round, idx) => {
+        return `[Turn ${idx + 1}] ` + (['MELCHIOR', 'BALTHASAR', 'CASPAR'] as MagiId[]).map(id => `${id}: ${round[id].revisedStanceLabel || round[id].revisedVote}`).join(' | ');
+      }).join('\n')
+    : '';
 
   const parentContext = parentConsensusSummary
     ? `\n\n【前提知識 / 直前の合議結果 (継続審議コンテキスト)】\n${parentConsensusSummary}\n`
@@ -284,12 +394,12 @@ ${delib ? `- 熟議後主張: ${delib.revisedStanceLabel || delib.revisedVote} (
 ${query}${parentContext}
 
 【各MAGIの個別決議と熟議内容】
-${summaryOfDeliberation}
+${summaryOfDeliberation}${turnsSummaryText}
 
 【集計結果】
 APPROVAL: ${voteCounts.APPROVAL}, DENIED: ${voteCounts.DENIED}, CONDITIONAL: ${voteCounts.CONDITIONAL}
 
-上記のデータを統合し、指定されたJSON構造で最高精度の最終決議レポートを出力してください。`
+上記のデータを統合し、各ユニットの見解の変節（opinionShifts）や相互説得関係（persuasionLinks）も含めて指定されたJSON構造で最高精度の最終決議レポートを出力してください。`
     }
   ];
 
@@ -303,6 +413,10 @@ APPROVAL: ${voteCounts.APPROVAL}, DENIED: ${voteCounts.DENIED}, CONDITIONAL: ${v
     else if (voteCounts.APPROVAL === 1 && voteCounts.DENIED === 1 && voteCounts.CONDITIONAL === 1) finalDecision = 'SPLIT_DECISION';
     else if (voteCounts.CONDITIONAL >= 2) finalDecision = 'CONDITIONAL';
 
+    const opinionShiftsToUse = (extractedOpinionShifts && extractedOpinionShifts.length > 0)
+      ? extractedOpinionShifts
+      : (parsed.opinionShifts || []);
+
     const consensusResult: ConsensusResult = {
       mode: activeMode,
       finalDecision: parsed.finalDecision || finalDecision,
@@ -312,7 +426,7 @@ APPROVAL: ${voteCounts.APPROVAL}, DENIED: ${voteCounts.DENIED}, CONDITIONAL: ${v
       synthesisDetails: parsed.synthesisDetails || rawRes,
       keyDisagreements: parsed.keyDisagreements || [],
       actionableRecommendation: parsed.actionableRecommendation || '状況に応じた対応を推奨します。',
-      opinionShifts: parsed.opinionShifts || [],
+      opinionShifts: opinionShiftsToUse,
       persuasionLinks: parsed.persuasionLinks || [],
       rawSynthesis: rawRes
     };
@@ -320,7 +434,7 @@ APPROVAL: ${voteCounts.APPROVAL}, DENIED: ${voteCounts.DENIED}, CONDITIONAL: ${v
     callbacks.onLog({
       source: 'MAGI_CORE',
       phase: 'CODE: 601 - JUDGMENT RENDERED',
-      text: `MAGI 決議完了: 【${consensusResult.finalStanceLabel || consensusResult.finalDecision}】 (APPROVAL:${voteCounts.APPROVAL} DENIED:${voteCounts.DENIED} CONDITIONAL:${voteCounts.CONDITIONAL})`,
+      text: `MAGI 決議完了: 【${consensusResult.finalStanceLabel || consensusResult.finalDecision}】 (APPROVAL:${voteCounts.APPROVAL} DENIED:${voteCounts.DENIED} CONDITIONAL:${voteCounts.CONDITIONAL})${opinionShiftsToUse.length > 0 ? ` [見解変節 ${opinionShiftsToUse.length}件を検出]` : ''}`,
       type: consensusResult.finalDecision === 'APPROVAL' ? 'success' : 'warn'
     });
 
@@ -342,7 +456,7 @@ APPROVAL: ${voteCounts.APPROVAL}, DENIED: ${voteCounts.DENIED}, CONDITIONAL: ${v
       synthesisDetails: '自動統合結果',
       keyDisagreements: [],
       actionableRecommendation: '通信状態を確認の上、必要に応じて再熟議を行ってください。',
-      opinionShifts: [],
+      opinionShifts: extractedOpinionShifts || [],
       persuasionLinks: [],
       rawSynthesis: ''
     };

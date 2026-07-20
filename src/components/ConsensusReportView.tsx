@@ -1,6 +1,6 @@
 import React from 'react';
 import { ConsensusResult } from '../types';
-import { CheckCircle2, ShieldAlert, AlertTriangle, FileText, Check, ListChecks, RotateCcw, Download } from 'lucide-react';
+import { CheckCircle2, ShieldAlert, AlertTriangle, FileText, Check, ListChecks, RotateCcw, Download, RefreshCw } from 'lucide-react';
 
 interface ConsensusReportViewProps {
   consensus: ConsensusResult;
@@ -114,6 +114,51 @@ export const ConsensusReportView: React.FC<ConsensusReportViewProps> = ({
             {consensus.synthesisDetails}
           </div>
         </div>
+
+        {/* Stance Evolution & Persuasion Section */}
+        {consensus.opinionShifts && consensus.opinionShifts.length > 0 && (
+          <div>
+            <h4 className="text-xs font-mono-nerv text-magi-cyan font-bold uppercase tracking-wider mb-2 flex items-center space-x-2">
+              <RefreshCw className="w-4 h-4 text-magi-cyan animate-pulse" />
+              <span>STANCE EVOLUTION & PERSUASION (見解の変節と説得プロセス)</span>
+            </h4>
+            <div className="p-4 rounded bg-black/60 border border-magi-cyan/30 space-y-3">
+              <p className="text-xs text-slate-400 font-sans">
+                熟議プロセスにおいて、以下のMAGIユニットが他ユニットの反論や視点を受け入れて立場・意見を変更しました：
+              </p>
+              <div className="grid grid-cols-1 gap-2.5">
+                {consensus.opinionShifts.map((shift, idx) => (
+                  <div key={idx} className="p-3 rounded bg-black/50 border border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+                    <div className="flex items-center space-x-3">
+                      <span className="font-mono-nerv font-bold px-2 py-1 rounded bg-slate-800 text-white border border-slate-700">
+                        {shift.magiId}
+                      </span>
+                      <div className="flex items-center space-x-2 font-mono-nerv">
+                        <span className="px-2 py-0.5 rounded bg-slate-800/80 text-slate-300 border border-slate-700">
+                          {shift.fromStanceLabel || shift.fromVote}
+                        </span>
+                        <span className="text-magi-cyan font-bold">➔</span>
+                        <span className="px-2 py-0.5 rounded bg-magi-cyan/20 text-magi-cyan border border-magi-cyan/60 font-bold glow-cyan">
+                          {shift.toStanceLabel || shift.toVote}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="flex-1 text-slate-300 text-xs font-sans pl-0 sm:pl-4 border-t sm:border-t-0 sm:border-l border-slate-800 pt-2 sm:pt-0">
+                      <p><span className="text-slate-400 font-semibold">理由:</span> {shift.reasonForShift}</p>
+                      {shift.influencedBy && shift.influencedBy.length > 0 && (
+                        <div className="mt-1 flex items-center space-x-1 text-[11px] text-magi-yellow">
+                          <span>💡 影響要因:</span>
+                          <span className="font-bold">{shift.influencedBy.join(', ')} の指摘</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Disagreements if any */}
         {consensus.keyDisagreements && consensus.keyDisagreements.length > 0 && (

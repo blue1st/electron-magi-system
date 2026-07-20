@@ -231,6 +231,48 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ settings, onSave, 
                   </div>
                 )}
               </div>
+
+              {/* Deliberation Mode & Turn Settings */}
+              <div className="p-4 rounded bg-black/50 border border-slate-800 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <label className="text-xs font-mono-nerv text-slate-200 font-bold block">
+                      DELIBERATION MODE (相互熟議プロトコル)
+                    </label>
+                    <span className="text-[11px] text-slate-400">
+                      各MAGIが他者の意見を吟味・反論し、見解を擦り合わせる多段階審議を実行します。
+                    </span>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={formData.enableDeliberation}
+                    onChange={(e) => setFormData({ ...formData, enableDeliberation: e.target.checked })}
+                    className="w-4 h-4 rounded border-slate-700 bg-black text-magi-orange focus:ring-magi-orange cursor-pointer"
+                  />
+                </div>
+
+                {formData.enableDeliberation && (
+                  <div className="pt-3 border-t border-slate-800/80 flex items-center justify-between">
+                    <div>
+                      <label className="text-xs font-mono-nerv text-magi-cyan font-bold block">
+                        DEBATE TURNS (熟議ラウンド数)
+                      </label>
+                      <span className="text-[11px] text-slate-400">
+                        相互議論を何ラウンド反復させるかを設定します
+                      </span>
+                    </div>
+                    <select
+                      value={formData.maxDebateTurns || 2}
+                      onChange={(e) => setFormData({ ...formData, maxDebateTurns: parseInt(e.target.value, 10) })}
+                      className="bg-black/80 border border-slate-700 text-xs font-mono-nerv text-magi-cyan font-bold rounded px-3 py-1.5 focus:border-magi-cyan focus:outline-none"
+                    >
+                      <option value={1}>1 Turn (高速熟議)</option>
+                      <option value={2}>2 Turns (標準・見解変節)</option>
+                      <option value={3}>3 Turns (深層議論・徹底反論)</option>
+                    </select>
+                  </div>
+                )}
+              </div>
             </div>
           )}
 
