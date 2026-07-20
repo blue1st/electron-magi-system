@@ -33,6 +33,14 @@ function createWindow() {
     }
     return { action: 'deny' };
   });
+
+  mainWindow.on('focus', () => {
+    try {
+      if (process.platform === 'darwin' && app.dock) {
+        app.dock.setBadge('');
+      }
+    } catch (e) {}
+  });
 }
 
 // Dynamic Dock Icon IPC Listener
@@ -49,6 +57,28 @@ ipcMain.on('update-dock-icon', (event, { dataUrl }) => {
     }
   } catch (err) {
     console.error('Failed to update dynamic dock icon:', err);
+  }
+});
+
+// Dock Bounce IPC Listener
+ipcMain.on('bounce-dock', (event, { type }) => {
+  try {
+    if (process.platform === 'darwin' && app.dock) {
+      app.dock.bounce(type || 'informational');
+    }
+  } catch (err) {
+    console.error('Failed to bounce dock:', err);
+  }
+});
+
+// Dock Badge IPC Listener
+ipcMain.on('set-badge', (event, { text }) => {
+  try {
+    if (process.platform === 'darwin' && app.dock) {
+      app.dock.setBadge(text || '');
+    }
+  } catch (err) {
+    console.error('Failed to set dock badge:', err);
   }
 });
 

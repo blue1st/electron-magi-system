@@ -6,7 +6,9 @@ import {
   ProtocolLog,
   MagiId,
   DeliberationSession,
-  OpinionShift
+  OpinionShift,
+  HumanInterventionResponse,
+  HumanInterventionRequest
 } from './types';
 import { DEFAULT_PERSONALITIES, detectDeliberationMode } from './config/defaultPrompts';
 import { runPhase1Initial, runPhase2Debate, runPhase3Consensus } from './services/magiEngine';
@@ -29,6 +31,9 @@ import { ConsensusReportView } from './components/ConsensusReportView';
 import { ProtocolLogsInspector } from './components/ProtocolLogsInspector';
 import { SettingsModal } from './components/SettingsModal';
 import { HistoryDrawer } from './components/HistoryDrawer';
+import { InterventionModal } from './components/InterventionModal';
+import { notifyHumanInterventionRequired, notifyConsensusCompleted } from './services/notificationService';
+import { playStartSound } from './services/soundService';
 import { Send, Terminal, HelpCircle, Link as LinkIcon, FileText, X, Globe, Loader2, RotateCcw, GitCommit } from 'lucide-react';
 
 const STORAGE_KEY_SETTINGS = 'MAGI_SETTINGS_V2';
@@ -39,6 +44,7 @@ const INITIAL_SETTINGS: Settings = {
   defaultModel: 'gpt-4o',
   enableDeliberation: true,
   maxDebateTurns: 2,
+  enableNotifications: true,
   soundEffects: true,
   personalities: DEFAULT_PERSONALITIES,
 };
@@ -211,6 +217,10 @@ export const App: React.FC = () => {
       setAttachedDoc(null);
     }
 
+    if (settings.soundEffects) {
+      playStartSound();
+    }
+
     addLog({
       source: 'SYSTEM',
       phase: 'INITIATE',
@@ -227,6 +237,8 @@ export const App: React.FC = () => {
       activeMagiStatus: { MELCHIOR: 'IDLE', BALTHASAR: 'IDLE', CASPAR: 'IDLE' },
       initialOutputs: {},
       deliberationOutputs: {},
+      deliberationRounds: [],
+      userInterventions: [],
       parentSessionId: parentSession?.id,
       parentConsensusSummary: parentConsensusSummary,
     });
@@ -247,23 +259,76 @@ export const App: React.FC = () => {
 
       setState((prev) => ({ ...prev, initialOutputs: initial }));
 
-      let delibOutputs: Partial<Record<MagiId, any>> | undefined = undefined;
-      let allRounds: Array<Record<MagiId, any>> | undefined = undefined;
-      let opinionShifts: OpinionShift[] = [];
+      // Phase 1 で介入要求があるか判定
+      const initialIntervention = Object.values(initial).find((o) => o.requestedIntervention)?.requestedIntervention;
+      if (initialIntervention) {
+        notifyHumanInterventionRequired(initialIntervention, settings);
+        setState((prev) => ({
+          ...prev,
+          step: 'AWAITING_INTERVENTION',
+          pendingIntervention: initialIntervention,
+        }));
+        return;
+      }
 
+      await continueDebateAndConsensus(
+        query,
+        initial,
+        settings,
+        deliberationId,
+        resolvedMode,
+        currentDoc || undefined,
+        parentConsensusSummary,
+        [],
+        1,
+        []
+      );
+
+    } catch (err: any) {
+      addLog({
+        source: 'SYSTEM',
+        phase: 'CRITICAL ERROR',
+        text: `システムエラー: ${err.message}`,
+        type: 'warn',
+      });
+      setState((prev) => ({
+        ...prev,
+        step: 'ERROR',
+        error: err.message,
+      }));
+    }
+  };
+
+  const continueDebateAndConsensus = async (
+    query: string,
+    initialOutputs: Record<MagiId, any>,
+    settings: Settings,
+    deliberationId: string,
+    resolvedMode: any,
+    attachedDoc: FetchedDocument | undefined,
+    parentConsensusSummary: string | undefined,
+    userInterventions: HumanInterventionResponse[] = [],
+    startTurn: number = 1,
+    existingRounds: Array<Record<MagiId, any>> = []
+  ) => {
+    let delibOutputs: Partial<Record<MagiId, any>> | undefined = undefined;
+    let allRounds: Array<Record<MagiId, any>> = existingRounds;
+    let opinionShifts: OpinionShift[] = [];
+
+    try {
       // PHASE 2: Cross Debate (If Enabled)
       if (settings.enableDeliberation) {
         const maxTurns = settings.maxDebateTurns || 2;
-        setState((prev) => ({ ...prev, step: 'PHASE_2_DEBATE', maxTurns, currentTurn: 1 }));
+        setState((prev) => ({ ...prev, step: 'PHASE_2_DEBATE', maxTurns, currentTurn: startTurn }));
         const debateResults = await runPhase2Debate(
           query,
-          initial,
+          initialOutputs,
           settings,
           {
             onLog: addLog,
             onMagiStatusChange: handleMagiStatusChange,
           },
-          currentDoc || undefined,
+          attachedDoc,
           deliberationId,
           parentConsensusSummary,
           (roundIndex, roundOutputs, currentShifts) => {
@@ -273,7 +338,10 @@ export const App: React.FC = () => {
               deliberationOutputs: roundOutputs,
               deliberationRounds: [...(prev.deliberationRounds || []), roundOutputs]
             }));
-          }
+          },
+          userInterventions,
+          startTurn,
+          existingRounds
         );
         delibOutputs = debateResults.finalDeliberationOutputs;
         allRounds = debateResults.allRounds;
@@ -284,13 +352,23 @@ export const App: React.FC = () => {
           deliberationOutputs: debateResults.finalDeliberationOutputs,
           deliberationRounds: debateResults.allRounds
         }));
+
+        if (debateResults.detectedIntervention) {
+          notifyHumanInterventionRequired(debateResults.detectedIntervention, settings);
+          setState((prev) => ({
+            ...prev,
+            step: 'AWAITING_INTERVENTION',
+            pendingIntervention: debateResults.detectedIntervention
+          }));
+          return;
+        }
       }
 
       // PHASE 3: Synthesis & Vote
       setState((prev) => ({ ...prev, step: 'PHASE_3_CONSENSUS' }));
       const consensus = await runPhase3Consensus(
         query,
-        initial,
+        initialOutputs,
         delibOutputs as any,
         settings,
         {
@@ -310,18 +388,23 @@ export const App: React.FC = () => {
         consensus: consensus,
       }));
 
+      // 決議完了通知の発火
+      notifyConsensusCompleted(consensus, settings);
+
       // Save to Deliberation Archives
       const newSession: DeliberationSession = {
         id: deliberationId,
         timestamp: new Date().toLocaleString(),
         query: query,
-        mode: selectedMode,
-        attachedDoc: currentDoc || undefined,
-        initialOutputs: initial,
-        deliberationOutputs: delibOutputs as any,
+        mode: resolvedMode,
+        attachedDoc: attachedDoc,
+        initialOutputs: initialOutputs,
+        deliberationOutputs: delibOutputs as any || {},
+        deliberationRounds: allRounds,
+        userInterventions: userInterventions,
         consensus: consensus,
-        logs: [],
-        parentSessionId: parentSession?.id,
+        logs: logs,
+        parentSessionId: state.parentSessionId,
         parentConsensusSummary: parentConsensusSummary,
       };
       const updated = saveSession(newSession);
@@ -342,6 +425,79 @@ export const App: React.FC = () => {
         error: err.message,
       }));
     }
+  };
+
+  const handleUserInterventionSubmit = (userDirective: string) => {
+    if (!state.pendingIntervention) return;
+
+    const newResponse: HumanInterventionResponse = {
+      requestId: state.pendingIntervention.id,
+      userDirective: userDirective,
+      timestamp: new Date().toISOString(),
+    };
+
+    const updatedInterventions = [...(state.userInterventions || []), newResponse];
+
+    addLog({
+      source: 'SYSTEM',
+      phase: 'CODE: 999 - HUMAN DIRECTIVE APPLIED',
+      text: `【最高統括官（人間）指示適用】: 「${userDirective}」`,
+      type: 'success',
+    });
+
+    const req = state.pendingIntervention;
+    const nextTurn = req.turn > 0 ? req.turn + 1 : 1;
+
+    setState((prev) => ({
+      ...prev,
+      pendingIntervention: undefined,
+      userInterventions: updatedInterventions,
+    }));
+
+    continueDebateAndConsensus(
+      state.query,
+      state.initialOutputs as any,
+      settings,
+      `SESSION-${Date.now()}`,
+      state.resolvedMode || state.mode,
+      state.attachedDoc,
+      state.parentConsensusSummary,
+      updatedInterventions,
+      nextTurn,
+      state.deliberationRounds || []
+    );
+  };
+
+  const handleSkipIntervention = () => {
+    if (!state.pendingIntervention) return;
+
+    addLog({
+      source: 'SYSTEM',
+      phase: 'CODE: 999 - INTERVENTION SKIPPED',
+      text: `【人間介入スキップ】MAGI自身の判断で熟議を再開します。`,
+      type: 'info',
+    });
+
+    const req = state.pendingIntervention;
+    const nextTurn = req.turn > 0 ? req.turn + 1 : 1;
+
+    setState((prev) => ({
+      ...prev,
+      pendingIntervention: undefined,
+    }));
+
+    continueDebateAndConsensus(
+      state.query,
+      state.initialOutputs as any,
+      settings,
+      `SESSION-${Date.now()}`,
+      state.resolvedMode || state.mode,
+      state.attachedDoc,
+      state.parentConsensusSummary,
+      state.userInterventions || [],
+      nextTurn,
+      state.deliberationRounds || []
+    );
   };
 
   const handleExportSessionMarkdown = (session: DeliberationSession) => {
@@ -660,6 +816,16 @@ export const App: React.FC = () => {
         onDeleteSession={handleDeleteSession}
         onClearAll={handleClearAllSessions}
       />
+
+      {/* Human Intervention Required Modal */}
+      {state.step === 'AWAITING_INTERVENTION' && state.pendingIntervention && (
+        <InterventionModal
+          request={state.pendingIntervention}
+          settings={settings}
+          onSubmitDirective={handleUserInterventionSubmit}
+          onSkip={handleSkipIntervention}
+        />
+      )}
     </div>
   );
 };

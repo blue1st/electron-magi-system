@@ -273,6 +273,43 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ settings, onSave, 
                   </div>
                 )}
               </div>
+
+              {/* Notifications & Sound Settings */}
+              <div className="p-4 rounded bg-black/50 border border-slate-800 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <label className="text-xs font-mono-nerv text-slate-200 font-bold block">
+                      DESKTOP NOTIFICATIONS & DOCK BOUNCE (通知 & Dock演出)
+                    </label>
+                    <span className="text-[11px] text-slate-400">
+                      決議完了時や人間介入要求時に、OSデスクトップ通知およびDockバウンスで通知します。
+                    </span>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={formData.enableNotifications !== false}
+                    onChange={(e) => setFormData({ ...formData, enableNotifications: e.target.checked })}
+                    className="w-4 h-4 rounded border-slate-700 bg-black text-magi-orange focus:ring-magi-orange cursor-pointer"
+                  />
+                </div>
+
+                <div className="pt-3 border-t border-slate-800/80 flex items-center justify-between">
+                  <div>
+                    <label className="text-xs font-mono-nerv text-slate-200 font-bold block">
+                      SOUND EFFECTS (サイバー効果音)
+                    </label>
+                    <span className="text-[11px] text-slate-400">
+                      決議完了チャイムや緊急警告アラート音を再生します。
+                    </span>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={formData.soundEffects}
+                    onChange={(e) => setFormData({ ...formData, soundEffects: e.target.checked })}
+                    className="w-4 h-4 rounded border-slate-700 bg-black text-magi-orange focus:ring-magi-orange cursor-pointer"
+                  />
+                </div>
+              </div>
             </div>
           )}
 

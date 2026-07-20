@@ -1,14 +1,5 @@
 import { DeliberationStep } from '../types';
 
-declare global {
-  interface Window {
-    electronAPI?: {
-      platform: string;
-      updateDockIcon: (dataUrl: string, step: DeliberationStep) => void;
-    };
-  }
-}
-
 /**
  * Generate a pure textless 3-node Triad MAGI dynamic icon DataURL
  */

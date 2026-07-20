@@ -7,7 +7,9 @@ import {
   ProtocolLog,
   DecisionVote,
   DeliberationMode,
-  OpinionShift
+  OpinionShift,
+  HumanInterventionRequest,
+  HumanInterventionResponse
 } from '../types';
 import { FetchedDocument } from './docFetcher';
 import { buildFullSystemPrompt, SYSTEM_CONSENSUS_PROMPT } from '../config/defaultPrompts';
@@ -64,7 +66,13 @@ export async function runPhase1Initial(
 
     try {
       const rawRes = await sendChatCompletion(settings, messages, personality.modelOverride);
-      const parsed = extractJsonFromResponse<{ vote?: DecisionVote; stanceLabel?: string; reasoning?: string; conditions?: string }>(rawRes, {
+      const parsed = extractJsonFromResponse<{
+        vote?: DecisionVote;
+        stanceLabel?: string;
+        reasoning?: string;
+        conditions?: string;
+        requestedIntervention?: { reason?: string; question?: string; suggestedOptions?: string[] };
+      }>(rawRes, {
         vote: 'CONDITIONAL',
         stanceLabel: '',
         reasoning: rawRes,
@@ -80,6 +88,24 @@ export async function runPhase1Initial(
         conditions: parsed.conditions,
         rawResponse: rawRes
       };
+
+      if (parsed.requestedIntervention && parsed.requestedIntervention.question) {
+        output.requestedIntervention = {
+          id: `REQ-${Date.now()}-${id}`,
+          turn: 0,
+          source: id,
+          reason: parsed.requestedIntervention.reason || '分析過程において最高統括官（人間）への確認が必要と判断しました。',
+          question: parsed.requestedIntervention.question,
+          suggestedOptions: parsed.requestedIntervention.suggestedOptions || []
+        };
+
+        callbacks.onLog({
+          source: id,
+          phase: 'CODE: 999 - HUMAN INTERVENTION REQUESTED',
+          text: `【人間介入要請】${personality.name} が確認・指示を要請中: 「${output.requestedIntervention.question}」`,
+          type: 'warn'
+        });
+      }
 
       results[id] = output;
       callbacks.onMagiStatusChange(id, 'DONE');
@@ -116,6 +142,7 @@ export interface Phase2DebateResult {
   finalDeliberationOutputs: Record<MagiId, MagiDeliberationOutput>;
   allRounds: Array<Record<MagiId, MagiDeliberationOutput>>;
   opinionShifts: OpinionShift[];
+  detectedIntervention?: HumanInterventionRequest;
 }
 
 export async function runPhase2Debate(
@@ -126,19 +153,35 @@ export async function runPhase2Debate(
   attachedDoc?: FetchedDocument,
   deliberationId: string = `SESSION-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
   parentConsensusSummary?: string,
-  onRoundComplete?: (roundIndex: number, roundOutputs: Record<MagiId, MagiDeliberationOutput>, opinionShifts: OpinionShift[]) => void
+  onRoundComplete?: (roundIndex: number, roundOutputs: Record<MagiId, MagiDeliberationOutput>, opinionShifts: OpinionShift[]) => void,
+  userInterventions?: HumanInterventionResponse[],
+  startTurn: number = 1,
+  existingRounds?: Array<Record<MagiId, MagiDeliberationOutput>>
 ): Promise<Phase2DebateResult> {
   const magiIds: MagiId[] = ['MELCHIOR', 'BALTHASAR', 'CASPAR'];
   const maxTurns = settings.maxDebateTurns && settings.maxDebateTurns >= 1 ? settings.maxDebateTurns : 2;
 
-  const allRounds: Array<Record<MagiId, MagiDeliberationOutput>> = [];
+  const allRounds: Array<Record<MagiId, MagiDeliberationOutput>> = existingRounds ? [...existingRounds] : [];
   const opinionShifts: OpinionShift[] = [];
+  let detectedIntervention: HumanInterventionRequest | undefined = undefined;
 
   let previousStances: Record<MagiId, { vote: DecisionVote; stanceLabel: string }> = {
     MELCHIOR: { vote: initialOutputs.MELCHIOR.initialVote, stanceLabel: initialOutputs.MELCHIOR.stanceLabel || initialOutputs.MELCHIOR.initialVote },
     BALTHASAR: { vote: initialOutputs.BALTHASAR.initialVote, stanceLabel: initialOutputs.BALTHASAR.stanceLabel || initialOutputs.BALTHASAR.initialVote },
     CASPAR: { vote: initialOutputs.CASPAR.initialVote, stanceLabel: initialOutputs.CASPAR.stanceLabel || initialOutputs.CASPAR.initialVote },
   };
+
+  if (allRounds.length > 0) {
+    const lastRound = allRounds[allRounds.length - 1];
+    magiIds.forEach(id => {
+      if (lastRound[id]) {
+        previousStances[id] = {
+          vote: lastRound[id].revisedVote,
+          stanceLabel: lastRound[id].revisedStanceLabel || lastRound[id].revisedVote
+        };
+      }
+    });
+  }
 
   const docContext = attachedDoc
     ? `\n\n【参照外部ドキュメント / 参考資料】\nタイトル: ${attachedDoc.title}\nURL: ${attachedDoc.url}\n本文抜粋:\n${attachedDoc.content}\n`
@@ -148,7 +191,13 @@ export async function runPhase2Debate(
     ? `\n\n【前提知識 / 直前の合議結果 (継続審議コンテキスト)】\n${parentConsensusSummary}\n`
     : '';
 
-  for (let turn = 1; turn <= maxTurns; turn++) {
+  const userDirectiveContext = userInterventions && userInterventions.length > 0
+    ? `\n\n【最高統括官（人間）からの緊急介入指示・補足情報】\n` +
+      userInterventions.map((u, i) => `[指示 ${i + 1}]: ${u.userDirective}`).join('\n') +
+      `\n上記の人間の指示・追加前提を100%最優先事項として考慮し、これまでの意見を修正・発展させてください。\n`
+    : '';
+
+  for (let turn = startTurn; turn <= maxTurns; turn++) {
     magiIds.forEach(id => callbacks.onMagiStatusChange(id, 'THINKING'));
 
     const debateHistoryText = allRounds.map((round, rIdx) => {
@@ -194,18 +243,19 @@ ${out.conditions ? `【提示条件】: ${out.conditions}` : ''}`;
         : '';
 
       const debatePrompt = `【議題】
-${query}${parentContext}${docContext}
+${query}${parentContext}${docContext}${userDirectiveContext}
 
 【全MAGIユニットの第1次分析結果】
 ${initialSummary}${historySection}
 
 【あなた (${personality.name} / ${personality.role}) への指令】
 第${turn}/${maxTurns}ターンの熟議を行います。
-議題、他MAGIの初案およびこれまでの熟議の変節プロセスを精査し、あなたの視点から以下について深く考察・反論・または意見の修正を行ってください：
-1. 他のMAGIの指摘で納得・妥当と思える点、あるいは納得できず対立する点
+議題、他MAGIの初案、これまでの熟議、および最高統括官（人間）からの指示を精査し、あなたの視点から以下について深く考察・反論・または意見の修正を行ってください：
+1. 他のMAGIの指摘および最高統括官の指示に対するあなたの見解
 2. 相互議論を経た現時点での【修正判定 (revisedVote)】および【修正主張ショートラベル (revisedStanceLabel)】
-3. 前ターン（または初案）から立場や条件に変更があった場合、その理由 (shiftReason) と、特にどのMAGIの意見に影響を受けたか (influencedBy)
-4. 最終的な判断理由
+3. 前ターン（または初案）から立場や条件に変更があった場合、その理由 (shiftReason) と、特にどのMAGIの意見（または人間指示）に影響を受けたか (influencedBy)
+4. もしさらに重大な情報不足や分岐点で人間に問いかけたい点があれば \`requestedIntervention\` に出力してください
+5. 最終的な判断理由
 
 以下のJSON形式で回答してください：
 {
@@ -214,7 +264,12 @@ ${initialSummary}${historySection}
   "refinements": "他のMAGIへの同意・反論・懸念・補足コメント",
   "finalArgument": "最終的な主張と判断根拠",
   "shiftReason": "前ターンから立場を変更・妥協・修正した場合はその理由（変更がない場合は空文字）",
-  "influencedBy": ["MELCHIOR", "BALTHASAR", "CASPAR のうち影響を受けたユニット（なければ空配列）"]
+  "influencedBy": ["MELCHIOR", "BALTHASAR", "CASPAR のうち影響を受けたユニット（なければ空配列）"],
+  "requestedIntervention": null または {
+    "reason": "人間に確認が必要と判断した理由",
+    "question": "最高統括官（人間）へ尋ねたい具体的な質問文",
+    "suggestedOptions": ["選択肢A", "選択肢B"]
+  }
 }`;
 
       const messages = [
@@ -231,6 +286,7 @@ ${initialSummary}${historySection}
           finalArgument?: string;
           shiftReason?: string;
           influencedBy?: MagiId[];
+          requestedIntervention?: { reason?: string; question?: string; suggestedOptions?: string[] };
         }>(rawRes, {
           revisedVote: previousStances[id].vote,
           revisedStanceLabel: previousStances[id].stanceLabel,
@@ -254,6 +310,28 @@ ${initialSummary}${historySection}
           influencedBy: parsed.influencedBy,
           rawResponse: rawRes
         };
+
+        if (parsed.requestedIntervention && parsed.requestedIntervention.question) {
+          const reqIntervention: HumanInterventionRequest = {
+            id: `REQ-${Date.now()}-${id}`,
+            turn,
+            source: id,
+            reason: parsed.requestedIntervention.reason || '熟議プロセスにおいて判断の分岐に到達しました。',
+            question: parsed.requestedIntervention.question,
+            suggestedOptions: parsed.requestedIntervention.suggestedOptions || []
+          };
+          output.requestedIntervention = reqIntervention;
+          if (!detectedIntervention) {
+            detectedIntervention = reqIntervention;
+          }
+
+          callbacks.onLog({
+            source: id,
+            phase: 'CODE: 999 - HUMAN INTERVENTION REQUESTED',
+            text: `【人間介入要請】${personality.name} が最高統括官（人間）への指示確認を要求: 「${reqIntervention.question}」`,
+            type: 'warn'
+          });
+        }
 
         currentRoundOutputs[id] = output;
         callbacks.onMagiStatusChange(id, 'DONE');
@@ -318,13 +396,19 @@ ${initialSummary}${historySection}
     if (onRoundComplete) {
       onRoundComplete(turn, completeRoundOutputs, opinionShifts);
     }
+
+    // もし介入要求が検出されたら、今回のターン完了時点で一時停止して戻る
+    if (detectedIntervention) {
+      break;
+    }
   }
 
   const finalDeliberationOutputs = allRounds[allRounds.length - 1];
   return {
     finalDeliberationOutputs,
     allRounds,
-    opinionShifts
+    opinionShifts,
+    detectedIntervention
   };
 }
 

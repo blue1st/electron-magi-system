@@ -24,8 +24,24 @@ export interface Settings {
   defaultModel: string;
   enableDeliberation: boolean; // false = Fast Mode (Single Phase), true = Deliberation Mode (3-Phase)
   maxDebateTurns?: number; // 熟議ターン数 (デフォルト: 2)
-  soundEffects: boolean;
+  enableNotifications?: boolean; // OS通知・Dock跳ね演出のON/OFF (デフォルト: true)
+  soundEffects: boolean; // 効果音のON/OFF
   personalities: Record<MagiId, MagiPersonality>;
+}
+
+export interface HumanInterventionRequest {
+  id: string;
+  turn: number;
+  source: MagiId | 'MAGI_CORE';
+  reason: string;
+  question: string;
+  suggestedOptions?: string[];
+}
+
+export interface HumanInterventionResponse {
+  requestId: string;
+  userDirective: string;
+  timestamp: string;
 }
 
 export interface MagiInitialOutput {
@@ -34,6 +50,7 @@ export interface MagiInitialOutput {
   initialVote: DecisionVote;
   stanceLabel?: string; // Flexible stance label e.g. "React (推奨)" or "技術刷新案"
   conditions?: string;
+  requestedIntervention?: HumanInterventionRequest;
   rawResponse: string;
 }
 
@@ -46,6 +63,7 @@ export interface MagiDeliberationOutput {
   finalArgument: string;
   shiftReason?: string; // 前ターンからの立場変更の理由（もし変更があれば）
   influencedBy?: MagiId[]; // 説得に寄与した他のMAGI
+  requestedIntervention?: HumanInterventionRequest;
   rawResponse: string;
 }
 
@@ -86,7 +104,7 @@ export interface ConsensusResult {
   rawSynthesis: string;
 }
 
-export type DeliberationStep = 'IDLE' | 'PHASE_1_INITIAL' | 'PHASE_2_DEBATE' | 'PHASE_3_CONSENSUS' | 'COMPLETED' | 'ERROR';
+export type DeliberationStep = 'IDLE' | 'PHASE_1_INITIAL' | 'PHASE_2_DEBATE' | 'AWAITING_INTERVENTION' | 'PHASE_3_CONSENSUS' | 'COMPLETED' | 'ERROR';
 
 export interface DeliberationState {
   step: DeliberationStep;
@@ -100,6 +118,8 @@ export interface DeliberationState {
   deliberationRounds?: Array<Record<MagiId, MagiDeliberationOutput>>; // ラウンドごとの熟議結果
   currentTurn?: number;
   maxTurns?: number;
+  pendingIntervention?: HumanInterventionRequest;
+  userInterventions?: HumanInterventionResponse[];
   consensus?: ConsensusResult;
   error?: string;
   parentSessionId?: string;
@@ -115,6 +135,7 @@ export interface DeliberationSession {
   initialOutputs: Partial<Record<MagiId, MagiInitialOutput>>;
   deliberationOutputs: Partial<Record<MagiId, MagiDeliberationOutput>>;
   deliberationRounds?: Array<Record<MagiId, MagiDeliberationOutput>>;
+  userInterventions?: HumanInterventionResponse[];
   consensus: ConsensusResult;
   logs: ProtocolLog[];
   parentSessionId?: string;
@@ -128,4 +149,15 @@ export interface ProtocolLog {
   phase: string;
   text: string;
   type: 'info' | 'vote' | 'warn' | 'success';
+}
+
+declare global {
+  interface Window {
+    electronAPI?: {
+      platform: string;
+      updateDockIcon: (dataUrl: string, step: DeliberationStep) => void;
+      bounceDock?: (type: 'critical' | 'informational') => void;
+      setBadge?: (text: string) => void;
+    };
+  }
 }
