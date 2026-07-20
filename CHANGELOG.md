@@ -1,5 +1,12 @@
 
 
+# [1.10.0](https://github.com/blue1st/electron-magi-system/compare/v1.9.0...v1.10.0) (2026-07-20)
+
+
+### Features
+
+* implement human intervention system with notification support, sound effects, and modal-based directive handling ([445ac03](https://github.com/blue1st/electron-magi-system/commit/445ac039cbe3d072722ea3b383954c41a45145fc))
+
 # [1.9.0](https://github.com/blue1st/electron-magi-system/compare/v1.8.0...v1.9.0) (2026-07-20)
 
 
