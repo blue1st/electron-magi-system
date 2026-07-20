@@ -1,5 +1,12 @@
 
 
+# [1.11.0](https://github.com/blue1st/electron-magi-system/compare/v1.10.0...v1.11.0) (2026-07-20)
+
+
+### Features
+
+* add configurable human intervention toggle and turn count controls to request flow and settings ([b917c2b](https://github.com/blue1st/electron-magi-system/commit/b917c2b7fc9cd6ba1dc880c1c7c86cb7e6ad0253))
+
 # [1.10.0](https://github.com/blue1st/electron-magi-system/compare/v1.9.0...v1.10.0) (2026-07-20)
 
 
