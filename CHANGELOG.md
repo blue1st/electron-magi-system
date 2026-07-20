@@ -1,5 +1,12 @@
 
 
+# [1.12.0](https://github.com/blue1st/electron-magi-system/compare/v1.11.0...v1.12.0) (2026-07-20)
+
+
+### Features
+
+* add full screen toggle functionality and header UI control via Electron IPC ([3946bd0](https://github.com/blue1st/electron-magi-system/commit/3946bd0794e99a7414da057c1a1dd16c1fbb5e21))
+
 # [1.11.0](https://github.com/blue1st/electron-magi-system/compare/v1.10.0...v1.11.0) (2026-07-20)
 
 
