@@ -1,4 +1,10 @@
+# Changelog
 
+## [1.12.1](https://github.com/blue1st/electron-magi-system/compare/v1.12.0...v1.12.1) (2026-09-22)
+
+### Bug Fixes
+
+* **homebrew:** use postflight_steps instead of deprecated postflight ([2151c46](https://github.com/blue1st/electron-magi-system/commit/2151c46cdca2ba236db07e456f62ba71f373bcd6))
 
 # [1.12.0](https://github.com/blue1st/electron-magi-system/compare/v1.11.0...v1.12.0) (2026-07-20)
 
