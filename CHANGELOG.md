@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.12.2](https://github.com/blue1st/electron-magi-system/compare/v1.12.1...v1.12.2) (2026-10-08)
+
+### Bug Fixes
+
+* **homebrew:** extract update-homebrew.sh and use caveats instead of postflight_steps ([ff0545e](https://github.com/blue1st/electron-magi-system/commit/ff0545eb8f81c04a0b0b49c74fe12807205336ec))
+
 ## [1.12.1](https://github.com/blue1st/electron-magi-system/compare/v1.12.0...v1.12.1) (2026-09-22)
 
 ### Bug Fixes
